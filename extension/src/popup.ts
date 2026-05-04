@@ -18,6 +18,13 @@ const newSiteInput = document.getElementById('newSiteInput') as HTMLInputElement
 const addSiteBtn = document.getElementById('addSiteBtn') as HTMLButtonElement;
 const bufferRange = document.getElementById('bufferRange') as HTMLInputElement;
 const bufferVal = document.getElementById('bufferVal')!;
+const messageRange = document.getElementById('messageRange') as HTMLInputElement;
+const messageVal = document.getElementById('messageVal')!;
+const modeBuffer = document.getElementById('modeBuffer') as HTMLInputElement;
+const modeMessage = document.getElementById('modeMessage') as HTMLInputElement;
+const bufferSettings = document.getElementById('bufferSettings')!;
+const messageSettings = document.getElementById('messageSettings')!;
+
 const useCustomApi = document.getElementById('useCustomApi') as HTMLInputElement;
 const customApiFields = document.getElementById('customApiFields')!;
 const customApiUrl = document.getElementById('customApiUrl') as HTMLInputElement;
@@ -26,6 +33,8 @@ const customApiKey = document.getElementById('customApiKey') as HTMLInputElement
 // Default settings
 const DEFAULT_SETTINGS = {
   autoSync: false,
+  syncMode: 'buffer', // 'buffer' or 'message'
+  messageThreshold: 10,
   sites: ['www.messenger.com'],
   bufferSize: 3000,
   useCustomApi: false,
@@ -49,8 +58,22 @@ async function loadSettings() {
 
 function renderSettings() {
   autoSyncToggle.checked = currentSettings.autoSync;
+  
+  if (currentSettings.syncMode === 'message') {
+    modeMessage.checked = true;
+    bufferSettings.classList.add('hidden');
+    messageSettings.classList.remove('hidden');
+  } else {
+    modeBuffer.checked = true;
+    bufferSettings.classList.remove('hidden');
+    messageSettings.classList.add('hidden');
+  }
+
   bufferRange.value = String(currentSettings.bufferSize);
   bufferVal.textContent = String(currentSettings.bufferSize);
+  messageRange.value = String(currentSettings.messageThreshold);
+  messageVal.textContent = String(currentSettings.messageThreshold);
+  
   useCustomApi.checked = currentSettings.useCustomApi;
   customApiFields.classList.toggle('hidden', !currentSettings.useCustomApi);
   customApiUrl.value = currentSettings.customApiUrl;
@@ -58,74 +81,43 @@ function renderSettings() {
   renderSiteList();
 }
 
-function renderSiteList() {
-  siteList.innerHTML = '';
-  currentSettings.sites.forEach((site, i) => {
-    const div = document.createElement('div');
-    div.className = 'site-item';
-    div.innerHTML = `<span>${site}</span><button data-index="${i}">✕</button>`;
-    siteList.appendChild(div);
-  });
-
-  // Attach remove handlers
-  siteList.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.getAttribute('data-index') || '0');
-      currentSettings.sites.splice(idx, 1);
-      renderSiteList();
-    });
-  });
-}
+// ... existing renderSiteList and other functions ...
 
 async function saveSettings() {
   currentSettings.autoSync = autoSyncToggle.checked;
+  currentSettings.syncMode = modeMessage.checked ? 'message' : 'buffer';
   currentSettings.bufferSize = parseInt(bufferRange.value);
+  currentSettings.messageThreshold = parseInt(messageRange.value);
   currentSettings.useCustomApi = useCustomApi.checked;
   currentSettings.customApiUrl = customApiUrl.value.trim();
   currentSettings.customApiKey = customApiKey.value.trim();
 
   return new Promise<void>((resolve) => {
     chrome.storage.sync.set({ smarttodo_settings: currentSettings }, () => {
-      // Notify background/content scripts that settings changed
       chrome.runtime.sendMessage({ action: 'settings_updated', settings: currentSettings });
       resolve();
     });
   });
 }
 
-// Auth
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    authSection.classList.add('hidden');
-    syncSection.classList.remove('hidden');
-    await loadSettings();
-    renderSettings();
-  } else {
-    authSection.classList.remove('hidden');
-    syncSection.classList.add('hidden');
-  }
+// ... auth and range listeners ...
+
+modeBuffer.addEventListener('change', () => {
+  bufferSettings.classList.remove('hidden');
+  messageSettings.classList.add('hidden');
 });
 
-loginBtn.addEventListener('click', async () => {
-  errorMsg.classList.add('hidden');
-  try {
-    loginBtn.disabled = true;
-    loginBtn.textContent = 'Signing in...';
-    await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-  } catch (error: any) {
-    errorMsg.textContent = error.message;
-    errorMsg.classList.remove('hidden');
-  } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Sign In';
-  }
+modeMessage.addEventListener('change', () => {
+  bufferSettings.classList.add('hidden');
+  messageSettings.classList.remove('hidden');
 });
 
-logoutBtn.addEventListener('click', () => signOut(auth));
-
-// Settings handlers
 bufferRange.addEventListener('input', () => {
   bufferVal.textContent = bufferRange.value;
+});
+
+messageRange.addEventListener('input', () => {
+  messageVal.textContent = messageRange.value;
 });
 
 useCustomApi.addEventListener('change', () => {

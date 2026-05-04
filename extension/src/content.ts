@@ -1,7 +1,11 @@
 let seenMessages = new Set<string>();
 let messageBuffer: string[] = [];
+let lastUrl = window.location.href;
+
 let settings = {
   autoSync: false,
+  syncMode: 'buffer',
+  messageThreshold: 10,
   sites: ['www.messenger.com'],
   bufferSize: 3000,
   useCustomApi: false,
@@ -129,18 +133,38 @@ function updateBufferUI() {
     document.body.appendChild(container);
   }
 
-  const currentSize = messageBuffer.join(' ').length;
-  const percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
+  const currentChars = messageBuffer.join(' ').length;
+  const currentMessages = messageBuffer.length;
+  
+  let label = '';
+  let percent = 0;
+
+  if (settings.syncMode === 'message') {
+    label = `Messages: ${currentMessages} / ${settings.messageThreshold}`;
+    percent = (currentMessages / settings.messageThreshold) * 100;
+  } else {
+    label = `Buffer: ${currentChars.toLocaleString()} / ${settings.bufferSize.toLocaleString()}`;
+    percent = (currentChars / settings.bufferSize) * 100;
+  }
   
   container.style.display = 'flex';
   container.innerHTML = `
-    <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : '#93c5fd'};"></div>
-    <span style="letter-spacing: -0.2px;">SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
+    <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent >= 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent >= 90 ? '#fca5a5' : '#93c5fd'};"></div>
+    <span style="letter-spacing: -0.2px;">${label}</span>
   `;
 }
 
 function checkAndAccumulateChat() {
   if (!chrome.runtime?.id) return;
+
+  // Handle Chat Switching (URL Change)
+  if (window.location.href !== lastUrl) {
+    lastUrl = window.location.href;
+    messageBuffer = []; // Reset buffer for new chat
+    seenMessages.clear();
+    updateBufferUI();
+  }
+
   if (!settings.autoSync || !isOnMonitoredSite()) {
     updateBufferUI();
     return;
@@ -162,17 +186,27 @@ function checkAndAccumulateChat() {
     }
 
     if (seenMessages.size > 1000) seenMessages.clear();
-    if (added) updateBufferUI();
+    if (added) {
+      updateBufferUI();
+      
+      // Check trigger conditions
+      let shouldSync = false;
+      if (settings.syncMode === 'message') {
+        if (messageBuffer.length >= settings.messageThreshold) shouldSync = true;
+      } else {
+        if (messageBuffer.join(' ').length >= settings.bufferSize) shouldSync = true;
+      }
 
-    if (messageBuffer.join(' ').length >= settings.bufferSize) {
-      try {
-        chrome.runtime.sendMessage({
-          action: 'process_chat',
-          chatLog: [...messageBuffer]
-        });
-        messageBuffer = [];
-        updateBufferUI();
-      } catch (e) {}
+      if (shouldSync) {
+        try {
+          chrome.runtime.sendMessage({
+            action: 'process_chat',
+            chatLog: [...messageBuffer]
+          });
+          messageBuffer = [];
+          updateBufferUI();
+        } catch (e) {}
+      }
     }
   } catch (e) {}
 }
