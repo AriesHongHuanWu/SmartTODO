@@ -26,10 +26,10 @@ function checkAndAccumulateChat() {
       seenMessages.clear();
     }
 
-    // Trigger AI analysis when buffer exceeds 2000 characters (~30-50 messages)
-    // Gemini Flash Lite free tier: 1,000 requests/day, 1M token context window
+    // Trigger AI analysis when buffer exceeds 5000 characters
+    // Gemini Flash Lite free tier: 1,000 req/day shared across ALL users
     const currentBufferStr = messageBuffer.join(' ');
-    if (currentBufferStr.length >= 2000) {
+    if (currentBufferStr.length >= 5000) {
       chrome.runtime.sendMessage({
         action: 'process_chat',
         chatLog: [...messageBuffer]

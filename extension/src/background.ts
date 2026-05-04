@@ -53,13 +53,36 @@ async function syncToFirestore(data: { newTasks: { title: string, context: strin
   const userId = currentUser.uid;
 
   try {
-    // 1. Add new tasks
+    // Fetch all existing tasks for this user to prevent duplicates
+    const existingQ = query(collection(db, "todos"), where("userId", "==", userId));
+    const existingSnapshot = await getDocs(existingQ);
+    const existingTitles = existingSnapshot.docs.map(d => d.data().title?.toLowerCase().trim());
+
+    // Helper: check if a new task title is too similar to any existing one
+    function isDuplicate(newTitle: string): boolean {
+      const normalized = newTitle.toLowerCase().trim();
+      return existingTitles.some(existing => {
+        if (!existing) return false;
+        // Exact match
+        if (existing === normalized) return true;
+        // One contains the other (catches "buy milk" vs "buy milk today")
+        if (existing.includes(normalized) || normalized.includes(existing)) return true;
+        return false;
+      });
+    }
+
+    // 1. Add new tasks (skip duplicates)
+    let addedCount = 0;
     for (const task of data.newTasks || []) {
       // Support old string array or new object array
       const title = typeof task === 'string' ? task : task.title;
       const context = typeof task === 'string' ? '' : (task.context || '');
       
       if (!title) continue;
+      if (isDuplicate(title)) {
+        console.log(`SmartTODO: Skipping duplicate task "${title}"`);
+        continue;
+      }
 
       await addDoc(collection(db, "todos"), {
         userId,
@@ -70,6 +93,9 @@ async function syncToFirestore(data: { newTasks: { title: string, context: strin
         createdAt: serverTimestamp(),
         completedAt: null
       });
+      // Also add to local list so we don't duplicate within the same batch
+      existingTitles.push(title.toLowerCase().trim());
+      addedCount++;
     }
 
     // 2. Mark existing tasks as completed
