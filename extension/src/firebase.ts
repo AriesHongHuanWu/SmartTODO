@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { initializeAuth, browserLocalPersistence } from "firebase/auth";
+import { initializeAuth, indexedDBLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -14,10 +14,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// In Chrome Extension Manifest V3, we must use initializeAuth with browserLocalPersistence
+// In Chrome Extension Manifest V3, we must use initializeAuth with indexedDBLocalPersistence
 // standard getAuth() often fails or loses session in service workers.
 export const auth = initializeAuth(app, {
-  persistence: browserLocalPersistence
+  persistence: indexedDBLocalPersistence
 });
 
 export const db = getFirestore(app);
