@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const EXTENSION_DIST = path.join(__dirname, '../extension/dist');
-const OUTPUT_ZIP = path.join(__dirname, '../web-app/public/extension.zip');
+const EXTENSION_DIST = path.join(__dirname, '../../extension/dist');
+const OUTPUT_ZIP = path.join(__dirname, '../public/extension.zip');
 
 async function zipExtension() {
   if (!fs.existsSync(EXTENSION_DIST)) {

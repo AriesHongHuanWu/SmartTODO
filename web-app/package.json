@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build:ext": "cd ../extension && npm install && npm run build",
-    "zip:ext": "node ../scripts/zip-extension.js",
+    "zip:ext": "node scripts/zip-extension.js",
     "prebuild": "npm run build:ext && npm run zip:ext",
     "build": "npx @cloudflare/next-on-pages",
     "start": "next start",
