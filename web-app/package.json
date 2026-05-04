@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build:ext": "cd ../extension && npm install --include=dev && npm run build",
+    "build:ext": "cd ../extension && npm install && npm run build",
     "zip:ext": "node scripts/zip-extension.js",
-    "prebuild": "npm run build:ext && npm run zip:ext",
+    "prepare-ext": "npm run build:ext && npm run zip:ext",
     "build": "next build",
-    "pages:build": "npm run prebuild && npx @cloudflare/next-on-pages",
+    "pages:build": "npm run prepare-ext && npx @cloudflare/next-on-pages",
     "start": "next start",
     "lint": "eslint"
   },
