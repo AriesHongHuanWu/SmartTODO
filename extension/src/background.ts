@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
@@ -7,8 +6,6 @@ let currentUser: any = null;
 auth.onAuthStateChanged((user) => {
   currentUser = user;
 });
-
-const genAI = new GoogleGenerativeAI("AIzaSyCTbBBrrl-UG589Xpb7UDeJss4-_lPZCsA");
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'process_chat') {
@@ -22,34 +19,27 @@ async function processChatLogs(chatLogs: string[]) {
     return;
   }
 
-  updateStatus("Analyzing chat with AI...", false, false);
+  updateStatus("Analyzing chat securely via API...", false, false);
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Or gemini-3.1-flash-lite-preview as requested
-    
-    const prompt = `Analyze the chat log below. 
-1. Identify new actionable tasks and output as JSON.
-2. Identify if any existing tasks have been completed based on context.
+    // Call the Next.js API route instead of Gemini directly
+    const response = await fetch("https://smarttodo.pages.dev/api/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        chatLogs,
+        userId: currentUser.uid
+      })
+    });
 
-Output strictly in JSON format:
-{
-  "newTasks": ["task 1", "task 2"],
-  "completedTasks": ["task 3"]
-}
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
 
-Chat Log:
-${chatLogs.join('\n')}
-`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text();
-    
-    // Clean up markdown if any
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    const parsedData = JSON.parse(text);
-    
+    const parsedData = await response.json();
     await syncToFirestore(parsedData);
     
   } catch (error: any) {
@@ -82,8 +72,6 @@ async function syncToFirestore(data: { newTasks: string[], completedTasks: strin
       
       querySnapshot.forEach(async (docSnap) => {
         const todo = docSnap.data();
-        // Simple string matching to see if completed tasks match pending tasks
-        // For better matching, could use LLM to map IDs, but simple string includes is a start
         const isCompleted = data.completedTasks.some(completedText => 
           todo.title.toLowerCase().includes(completedText.toLowerCase()) || 
           completedText.toLowerCase().includes(todo.title.toLowerCase())

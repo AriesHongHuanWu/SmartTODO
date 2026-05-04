@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "zip-extension": "node scripts/zip-extension.js",
-    "copy-out": "node scripts/copy-out.js",
-    "install-all": "npm install && cd extension && npm install && cd ../web-app && npm install",
-    "build": "cd extension && npm install && npm run build && cd .. && npm run zip-extension && cd web-app && npm install && npm run build && cd .. && npm run copy-out"
+    "install-all": "npm install && cd extension && npm install && cd ../web-app && npm install --legacy-peer-deps",
+    "build": "cd extension && npm install && npm run build && cd .. && npm run zip-extension && cd web-app && npm install --legacy-peer-deps && npx @cloudflare/next-on-pages"
   },
   "devDependencies": {
     "archiver": "^7.0.1"

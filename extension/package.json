@@ -8,7 +8,6 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "firebase": "^11.0.1"
   },
   "devDependencies": {
