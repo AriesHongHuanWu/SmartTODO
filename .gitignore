@@ -4,5 +4,4 @@ node_modules/
 extension/dist/
 web-app/.next/
 web-app/out/
-web-app/public/extension.zip
 node_modules
