@@ -50,34 +50,41 @@ ${existingTasks.map((t: any, i: number) => `${i + 1}. "${t.title}" (category: ${
 
 If you detect that any of these tasks have been COMPLETED based on the chat, include them in "completedTasks".
 If you detect that any of these tasks have CHANGED (e.g. rescheduled, details modified), include them in "updatedTasks" with the original title and the new fields.
-`;
+      existingTasksText = JSON.stringify(existingTasks, null, 2);
     }
 
     const now = new Date().toISOString();
     const prompt = `You are a task extraction AI. The current date and time is: ${now}
 
-Analyze the chat log below.
+Analyze the chat log below. The chat log includes the text, the URL of the chat (threadUrl), and the site name.
 
 RULES:
-1. Identify NEW actionable tasks. For each, provide: title, context, category, and dueDate.
-2. Categories MUST be one of: general, meeting, homework, shopping, work, personal
-3. If you can detect a deadline from the conversation (e.g. "by Friday", "before 3pm tomorrow"), set dueDate as an ISO 8601 string. Otherwise set it to null.
-4. If the conversation is just casual chat with NO actionable tasks, return empty arrays. Do NOT invent tasks.
-5. Detect if existing tasks have been completed or updated/rescheduled.
-${existingTasksBlock}
-Output strictly in JSON format:
+1. Identify NEW actionable tasks. For each, provide: title, context, category, dueDate, threadUrl, and siteName.
+2. 'category' must be one of: 'work', 'personal', 'shopping', 'meeting', 'homework', 'general'.
+3. 'dueDate' should be in ISO 8601 format (e.g. '2026-05-05T10:00:00Z') or null if no specific time is mentioned. Guess the year as ${new Date().getFullYear()} if omitted.
+4. Compare against Existing Pending Tasks. If a new message implies a change (e.g. rescheduling) to an existing task, return an action of "update" and the EXACT title of the existing task so we can update it.
+5. Provide the original URL where the task was discussed in 'threadUrl'.
+6. Return output in STRICT JSON format matching this schema:
 {
-  "newTasks": [
-    { "title": "Buy milk", "context": "Alice asked you to buy milk on the way home", "category": "shopping", "dueDate": null }
-  ],
-  "completedTasks": ["Buy milk"],
-  "updatedTasks": [
-    { "originalTitle": "Team meeting at 2pm", "title": "Team meeting at 3pm", "context": "Bob rescheduled the meeting to 3pm", "category": "meeting", "dueDate": "2026-05-05T15:00:00Z" }
+  "tasks": [
+    {
+      "action": "create" | "update",
+      "targetTitle": "Title of existing task" (only if action is update),
+      "title": "Task title",
+      "context": "Why we need to do this based on chat",
+      "category": "work",
+      "dueDate": "2026-05-05T10:00:00Z" | null,
+      "threadUrl": "https://messenger.com/t/...",
+      "siteName": "messenger.com"
+    }
   ]
 }
 
-Chat Log:
-${chatLogs.join('\n')}
+Existing Pending Tasks:
+${existingTasksText}
+
+Chat Logs:
+${JSON.stringify(chatLogs, null, 2)}
 `;
 
     const result = await model.generateContent(prompt);

@@ -1,25 +1,31 @@
 let seenMessages = new Set<string>();
-let messageBuffer: string[] = [];
-let lastMessageText: string | null = null; // 用於 Incremental Mode 紀錄上一批最後一則訊息
+let messageBuffer: {text: string, url: string, site: string}[] = [];
 
 let settings = {
   autoSync: false,
-  syncMode: 'buffer',
-  messageThreshold: 10,
-  sites: ['www.messenger.com', 'instagram.com'],
+  sites: ['messenger.com', 'instagram.com', 'whatsapp.com'],
   bufferSize: 3000,
   useCustomApi: false,
   customApiUrl: '',
   customApiKey: ''
 };
 
-// Load settings
+// Load settings and hashes
 chrome.storage.sync.get('smarttodo_settings', (result) => {
   if (result.smarttodo_settings) {
     settings = { ...settings, ...result.smarttodo_settings };
   }
   updateBufferUI();
 });
+
+chrome.storage.local.get('seen_hashes', (res) => {
+  if (res.seen_hashes) {
+    res.seen_hashes.forEach((h: string) => seenMessages.add(h));
+  }
+});
+
+// Time detection regex (Local, zero AI cost)
+const timeRegex = /([今明後]天|禮拜[一二三四五六日天]|星期[一二三四五六日天]|下週|下星期|早上|下午|晚上|\d{1,2}點|\d{1,2}:\d{2}|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|[0-9]{1,2}(am|pm))/i;
 
 // Listen for settings updates and toast requests
 chrome.runtime.onMessage.addListener((request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
@@ -28,7 +34,7 @@ chrome.runtime.onMessage.addListener((request: any, sender: chrome.runtime.Messa
     updateBufferUI();
   }
   if (request.action === 'show_toast') {
-    showToast(request.message, request.isError);
+    showToast(request.message, request.isError, request.isAlert);
   }
   if (request.action === 'extract_chat') {
     if (messageBuffer.length > 0) {
@@ -45,8 +51,8 @@ chrome.runtime.onMessage.addListener((request: any, sender: chrome.runtime.Messa
   }
 });
 
-function showToast(message: string, isError = false) {
-  const toastId = 'smarttodo-toast';
+function showToast(message: string, isError = false, isAlert = false) {
+  const toastId = isAlert ? 'smarttodo-alert' : 'smarttodo-toast';
   let toast = document.getElementById(toastId);
   
   if (!toast) {
@@ -54,46 +60,46 @@ function showToast(message: string, isError = false) {
     toast.id = toastId;
     Object.assign(toast.style, {
       position: 'fixed',
-      bottom: '20px',
+      bottom: isAlert ? '120px' : '20px',
       right: '20px',
       padding: '12px 20px',
       borderRadius: '12px',
-      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      backgroundColor: isAlert ? 'rgba(255, 250, 240, 0.95)' : 'rgba(255, 255, 255, 0.9)',
       backdropFilter: 'blur(10px)',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-      border: '1px solid rgba(255, 255, 255, 0.3)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+      border: `1px solid ${isAlert ? 'rgba(251, 191, 36, 0.5)' : 'rgba(255, 255, 255, 0.3)'}`,
       zIndex: '2147483647',
-      transition: 'all 0.3s ease',
+      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       opacity: '0',
-      transform: 'translateY(20px)',
+      transform: 'translateY(20px) scale(0.95)',
       display: 'flex',
       alignItems: 'center',
       gap: '10px',
       fontSize: '14px',
-      fontWeight: '500',
+      fontWeight: '600',
+      color: '#1e293b',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     });
     document.body.appendChild(toast);
   }
 
-  const icon = isError ? '❌' : '✨';
-  const color = isError ? '#ef4444' : '#3b82f6';
+  const icon = isError ? '❌' : (isAlert ? '💡' : '✨');
+  const color = isError ? '#ef4444' : (isAlert ? '#d97706' : '#3b82f6');
   toast.innerHTML = `<span style="font-size: 18px;">${icon}</span> <span style="color: ${color}">${message}</span>`;
   
   requestAnimationFrame(() => {
     toast!.style.opacity = '1';
-    toast!.style.transform = 'translateY(0)';
+    toast!.style.transform = 'translateY(0) scale(1)';
   });
 
   setTimeout(() => {
     toast!.style.opacity = '0';
-    toast!.style.transform = 'translateY(20px)';
-  }, 3000);
+    toast!.style.transform = 'translateY(20px) scale(0.95)';
+  }, isAlert ? 6000 : 3000);
 }
 
 function isOnMonitoredSite(): boolean {
   const currentHost = window.location.hostname.toLowerCase();
-  if (currentHost.includes('messenger.com') || currentHost.includes('instagram.com')) return true;
   return settings.sites.some(site => site && currentHost.includes(site.toLowerCase()));
 }
 
@@ -128,30 +134,29 @@ function updateBufferUI() {
       alignItems: 'center',
       gap: '8px',
       pointerEvents: 'none',
-      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+      transition: 'all 0.4s ease'
     });
     document.body.appendChild(container);
   }
 
-  const isMessageMode = settings.syncMode === 'message';
-  let percent = 0;
-  let text = '';
-
-  if (isMessageMode) {
-    const currentCount = messageBuffer.length;
-    percent = Math.min(100, (currentCount / (settings.messageThreshold || 10)) * 100);
-    text = `SmartTODO: ${currentCount} / ${settings.messageThreshold || 10} msgs`;
-  } else {
-    const currentSize = messageBuffer.join(' ').length;
-    percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
-    text = `SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()} chars`;
-  }
+  const currentSize = messageBuffer.map(m => m.text).join(' ').length;
+  const percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
   
   container.style.display = 'flex';
   container.innerHTML = `
     <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : '#93c5fd'};"></div>
-    <span style="letter-spacing: -0.2px;">${text}</span>
+    <span style="letter-spacing: -0.2px;">SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
   `;
+}
+
+// Simple hash function for persistence
+function hashStr(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString();
 }
 
 function checkAndAccumulateChat() {
@@ -162,12 +167,6 @@ function checkAndAccumulateChat() {
   }
 
   try {
-    const currentHost = window.location.hostname.toLowerCase();
-    // 判斷是否為通訊軟體 (Messenger, Instagram) 等網站
-    const isMessengerSite = currentHost.includes('messenger.com') || currentHost.includes('instagram.com');
-
-    // 嘗試從畫面中擷取時間資訊，為了簡化並相容多數網站，我們在訊息元素的父層或附近尋找可能的時間字串
-    // 通常時間會藏在 aria-label, data-tooltip-content 或是鄰近的 span 裡面
     const messageElements = Array.from(document.querySelectorAll('div[dir="auto"]'));
     const chatTexts = messageElements
       .map(el => {

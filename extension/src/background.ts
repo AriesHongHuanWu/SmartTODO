@@ -68,10 +68,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'settings_updated') {
     settings = { ...settings, ...request.settings };
   }
+  if (request.action === 'check_schedule') {
+    handleCheckSchedule(request.text);
+  }
 });
 
-async function processChatLogs(chatLogs: string[]) {
-  // Wait for auth before checking
+// Real-time time detection alert logic
+async function handleCheckSchedule(text: string) {
+  const user = await waitForAuth();
+  if (!user) return;
+
+  try {
+    const q = query(
+      collection(db, "todos"), 
+      where("userId", "==", user.uid), 
+      where("status", "==", "pending")
+    );
+    const snap = await getDocs(q);
+    const count = snap.docs.filter(d => d.data().dueDate !== null).length;
+    
+    if (count > 0) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'show_toast',
+            message: `SmartTODO Alert: Found a time mention ("${text}"). You have ${count} scheduled upcoming tasks!`,
+            isError: false,
+            isAlert: true
+          }).catch(() => {});
+        }
+      });
+    }
+  } catch(e) {}
+}
+
+async function processChatLogs(chatLogObjects: {text: string, url: string, site: string}[]) {
   const user = await waitForAuth();
   
   if (!user) {
@@ -85,21 +116,20 @@ async function processChatLogs(chatLogs: string[]) {
     // Fetch existing pending tasks to send to the AI for context
     let existingTasks: { title: string, category: string, dueDate: string | null }[] = [];
     try {
-      const existingQ = query(collection(db, "todos"), where("userId", "==", currentUser.uid), where("status", "==", "pending"));
+      const existingQ = query(collection(db, "todos"), where("userId", "==", user.uid), where("status", "==", "pending"));
       const existingSnap = await getDocs(existingQ);
       existingTasks = existingSnap.docs.map(d => {
         const data = d.data();
         return {
-          title: data.title || '',
-          category: data.category || 'general',
-          dueDate: data.dueDate ? data.dueDate.toDate?.().toISOString?.() || null : null
+          title: data.title,
+          category: data.category,
+          dueDate: data.dueDate ? new Date(data.dueDate.seconds * 1000).toISOString() : null
         };
       });
-    } catch (e) {
-      console.warn("SmartTODO: Could not fetch existing tasks for AI context", e);
+    } catch (dbError) {
+      console.warn("Failed to fetch existing tasks for context", dbError);
     }
 
-    // Determine API endpoint
     const apiUrl = settings.useCustomApi && settings.customApiUrl 
       ? settings.customApiUrl 
       : "https://smarttodo.pages.dev/api/analyze";
@@ -136,119 +166,49 @@ async function processChatLogs(chatLogs: string[]) {
 
 async function syncToFirestore(data: any) {
   updateStatus("Syncing to database...", false, false);
-  const userId = currentUser.uid;
+  const userId = currentUser?.uid;
+  if (!userId) return;
 
   try {
-    // Fetch all existing tasks for duplicate detection
-    let existingDocs: any[] = [];
-    try {
-      const existingQ = query(collection(db, "todos"), where("userId", "==", userId));
-      const existingSnap = await getDocs(existingQ);
-      existingDocs = existingSnap.docs;
-    } catch (e) {
-      console.warn("SmartTODO: Could not fetch existing tasks for dedup", e);
-    }
-
-    const existingTitles = existingDocs.map(d => d.data().title?.toLowerCase().trim());
-
-    function isDuplicate(newTitle: string): boolean {
-      const normalized = newTitle.toLowerCase().trim();
-      return existingTitles.some(existing => {
-        if (!existing) return false;
-        if (existing === normalized) return true;
-        if (existing.includes(normalized) || normalized.includes(existing)) return true;
-        return false;
-      });
-    }
-
-    // 1. Add new tasks (skip duplicates)
-    let addedCount = 0;
-    for (const task of data.newTasks || []) {
-      const title = typeof task === 'string' ? task : task.title;
-      const context = typeof task === 'string' ? '' : (task.context || '');
-      const category = typeof task === 'string' ? 'general' : (task.category || 'general');
-      const dueDateStr = typeof task === 'string' ? null : (task.dueDate || null);
-      
-      if (!title) continue;
-      if (isDuplicate(title)) {
-        console.log(`SmartTODO: Skipping duplicate task "${title}"`);
-        continue;
-      }
-
-      const docData: any = {
-        userId,
-        title,
-        context,
-        category,
-        status: 'pending',
-        source: 'messenger',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        completedAt: null,
-        dueDate: null
-      };
-
-      // Parse dueDate if provided by AI
-      if (dueDateStr) {
-        try {
-          docData.dueDate = Timestamp.fromDate(new Date(dueDateStr));
-        } catch (e) {
-          console.warn("SmartTODO: Could not parse dueDate", dueDateStr);
-        }
-      }
-
-      await addDoc(collection(db, "todos"), docData);
-      existingTitles.push(title.toLowerCase().trim());
-      addedCount++;
-    }
-
-    // 2. Mark existing tasks as completed
-    if (data.completedTasks && data.completedTasks.length > 0 && existingDocs.length > 0) {
-      for (const docSnap of existingDocs) {
-        const todo = docSnap.data();
-        if (todo.status !== 'pending') continue;
-        
-        const isCompleted = data.completedTasks.some((completedText: string) => 
-          todo.title.toLowerCase().includes(completedText.toLowerCase()) || 
-          completedText.toLowerCase().includes(todo.title.toLowerCase())
-        );
-        
-        if (isCompleted) {
-          await updateDoc(docSnap.ref, {
-            status: 'completed',
-            completedBy: 'ai',
-            completedAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
-    }
-
-    // 3. Handle updated/rescheduled tasks
-    if (data.updatedTasks && data.updatedTasks.length > 0 && existingDocs.length > 0) {
-      for (const update of data.updatedTasks) {
-        const originalTitle = (update.originalTitle || '').toLowerCase().trim();
-        const matchingDoc = existingDocs.find(d => {
-          const t = d.data().title?.toLowerCase().trim();
-          return t === originalTitle || t?.includes(originalTitle) || originalTitle.includes(t || '');
-        });
-
-        if (matchingDoc) {
-          const updateData: any = { updatedAt: serverTimestamp() };
-          if (update.title) updateData.title = update.title;
-          if (update.context) updateData.context = update.context;
-          if (update.category) updateData.category = update.category;
-          if (update.dueDate) {
-            try {
-              updateData.dueDate = Timestamp.fromDate(new Date(update.dueDate));
-            } catch (e) { /* ignore bad date */ }
+    let count = 0;
+    if (data.tasks && Array.isArray(data.tasks)) {
+      for (const t of data.tasks) {
+        if (t.action === 'update' && t.targetTitle) {
+          // Find the existing task and update it
+          const q = query(collection(db, "todos"), where("userId", "==", userId), where("status", "==", "pending"));
+          const snap = await getDocs(q);
+          const docToUpdate = snap.docs.find(d => d.data().title === t.targetTitle);
+          if (docToUpdate) {
+            await updateDoc(docToUpdate.ref, {
+              title: t.title,
+              context: t.context,
+              category: t.category,
+              dueDate: t.dueDate ? Timestamp.fromDate(new Date(t.dueDate)) : null,
+              updatedAt: serverTimestamp(),
+              url: t.threadUrl || null,
+              site: t.siteName || null
+            });
+            count++;
           }
-          await updateDoc(matchingDoc.ref, updateData);
+        } else {
+          // Create new
+          await addDoc(collection(db, "todos"), {
+            userId: userId,
+            title: t.title,
+            context: t.context,
+            category: t.category,
+            status: "pending",
+            dueDate: t.dueDate ? Timestamp.fromDate(new Date(t.dueDate)) : null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            url: t.threadUrl || null,
+            site: t.siteName || null
+          });
+          count++;
         }
       }
     }
-
-    updateStatus(`Sync complete! (${addedCount} new)`, false, true);
+    updateStatus(count > 0 ? `✨ Sync complete! (${count} tasks)` : "✨ No new tasks detected.", false, true);
   } catch (error: any) {
     console.error("SmartTODO sync error:", error);
     updateStatus("Error syncing to DB: " + (error.message || "Unknown"), true, true);
