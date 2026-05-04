@@ -1,20 +1,17 @@
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth } from "./firebase";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const authSection = document.getElementById('authSection')!;
 const syncSection = document.getElementById('syncSection')!;
 const loginBtn = document.getElementById('loginBtn') as HTMLButtonElement;
 const logoutBtn = document.getElementById('logoutBtn') as HTMLButtonElement;
-const saveBtn = document.getElementById('saveBtn') as HTMLButtonElement;
 const emailInput = document.getElementById('email') as HTMLInputElement;
 const passwordInput = document.getElementById('password') as HTMLInputElement;
 const errorMsg = document.getElementById('errorMsg')!;
-const statusMsg = document.getElementById('statusMsg')!;
 
-// Settings elements
-const autoSyncToggle = document.getElementById('autoSyncToggle') as HTMLInputElement;
+const autoSyncToggle = document.getElementById('autoSync') as HTMLInputElement;
 const siteList = document.getElementById('siteList')!;
-const newSiteInput = document.getElementById('newSiteInput') as HTMLInputElement;
+const newSiteInput = document.getElementById('newSite') as HTMLInputElement;
 const addSiteBtn = document.getElementById('addSiteBtn') as HTMLButtonElement;
 const bufferRange = document.getElementById('bufferRange') as HTMLInputElement;
 const bufferVal = document.getElementById('bufferVal')!;
@@ -30,10 +27,13 @@ const customApiFields = document.getElementById('customApiFields')!;
 const customApiUrl = document.getElementById('customApiUrl') as HTMLInputElement;
 const customApiKey = document.getElementById('customApiKey') as HTMLInputElement;
 
+const syncStatus = document.getElementById('syncStatus')!;
+const statusText = document.getElementById('statusText')!;
+
 // Default settings
 const DEFAULT_SETTINGS = {
   autoSync: false,
-  syncMode: 'buffer', // 'buffer' or 'message'
+  syncMode: 'buffer',
   messageThreshold: 10,
   sites: ['www.messenger.com'],
   bufferSize: 3000,
@@ -81,7 +81,24 @@ function renderSettings() {
   renderSiteList();
 }
 
-// ... existing renderSiteList and other functions ...
+function renderSiteList() {
+  siteList.innerHTML = '';
+  currentSettings.sites.forEach((site, i) => {
+    const div = document.createElement('div');
+    div.className = 'site-item';
+    div.innerHTML = `<span>${site}</span><button data-index="${i}">✕</button>`;
+    siteList.appendChild(div);
+  });
+
+  siteList.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.getAttribute('data-index') || '0');
+      currentSettings.sites.splice(idx, 1);
+      renderSiteList();
+      saveSettings();
+    });
+  });
+}
 
 async function saveSettings() {
   currentSettings.autoSync = autoSyncToggle.checked;
@@ -100,54 +117,88 @@ async function saveSettings() {
   });
 }
 
-// ... auth and range listeners ...
+// Auth
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    authSection.classList.add('hidden');
+    syncSection.classList.remove('hidden');
+    await loadSettings();
+    renderSettings();
+  } else {
+    authSection.classList.remove('hidden');
+    syncSection.classList.add('hidden');
+  }
+});
+
+loginBtn.addEventListener('click', async () => {
+  errorMsg.classList.add('hidden');
+  try {
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Signing in...';
+    await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+  } catch (error: any) {
+    errorMsg.textContent = error.message;
+    errorMsg.classList.remove('hidden');
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Sign In';
+  }
+});
+
+logoutBtn.addEventListener('click', () => signOut(auth));
+
+// UI Listeners
+addSiteBtn.addEventListener('click', () => {
+  const site = newSiteInput.value.trim();
+  if (site && !currentSettings.sites.includes(site)) {
+    currentSettings.sites.push(site);
+    newSiteInput.value = '';
+    renderSiteList();
+    saveSettings();
+  }
+});
+
+autoSyncToggle.addEventListener('change', saveSettings);
 
 modeBuffer.addEventListener('change', () => {
   bufferSettings.classList.remove('hidden');
   messageSettings.classList.add('hidden');
+  saveSettings();
 });
 
 modeMessage.addEventListener('change', () => {
   bufferSettings.classList.add('hidden');
   messageSettings.classList.remove('hidden');
+  saveSettings();
 });
 
 bufferRange.addEventListener('input', () => {
   bufferVal.textContent = bufferRange.value;
 });
+bufferRange.addEventListener('change', saveSettings);
 
 messageRange.addEventListener('input', () => {
   messageVal.textContent = messageRange.value;
 });
+messageRange.addEventListener('change', saveSettings);
 
 useCustomApi.addEventListener('change', () => {
   customApiFields.classList.toggle('hidden', !useCustomApi.checked);
+  saveSettings();
 });
 
-addSiteBtn.addEventListener('click', () => {
-  const site = newSiteInput.value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  if (site && !currentSettings.sites.includes(site)) {
-    currentSettings.sites.push(site);
-    renderSiteList();
-    newSiteInput.value = '';
-  }
-});
+customApiUrl.addEventListener('change', saveSettings);
+customApiKey.addEventListener('change', saveSettings);
 
-saveBtn.addEventListener('click', async () => {
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving...';
-  await saveSettings();
-  statusMsg.textContent = '✓ Settings saved!';
-  statusMsg.style.color = '#10b981';
-  saveBtn.disabled = false;
-  saveBtn.textContent = 'Save Settings';
-  setTimeout(() => { statusMsg.textContent = ''; }, 2000);
-});
-
-// Listen for sync status from background
+// Status updates from background
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === 'sync_status') {
-    statusMsg.textContent = request.status;
-    statusMsg.style.color = request.error ? '#ef4444' : '#10b981';
+    syncStatus.classList.remove('hidden');
+    statusText.textContent = request.status;
+    if (request.error) {
+      statusText.style.color = '#ef4444';
+    } else {
+      statusText.style.color = request.done ? '#10b981' : '#3b82f6';
+    }
   }
 });
