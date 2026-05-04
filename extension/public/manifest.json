@@ -11,6 +11,13 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "https://*.vercel.app/*",
+      "https://*.smarttodo.com/*"
+    ]
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "SmartTODO"
