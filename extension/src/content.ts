@@ -56,49 +56,100 @@ chrome.runtime.onMessage.addListener((request: any, _sender: chrome.runtime.Mess
 
 function showToast(message: string, isError = false, isAlert = false) {
   const toastId = isAlert ? 'smarttodo-alert' : 'smarttodo-toast';
-  let toast = document.getElementById(toastId);
+  let toast = document.getElementById(toastId) as HTMLElement & { _timerId?: any };
   
   if (!toast) {
-    toast = document.createElement('div');
+    toast = document.createElement('div') as any;
     toast.id = toastId;
     Object.assign(toast.style, {
       position: 'fixed',
       bottom: isAlert ? '120px' : '20px',
       right: '20px',
-      padding: '12px 20px',
-      borderRadius: '12px',
+      height: '40px',
+      borderRadius: '20px',
       backgroundColor: isAlert ? 'rgba(255, 250, 240, 0.95)' : 'rgba(255, 255, 255, 0.9)',
       backdropFilter: 'blur(10px)',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+      boxShadow: isAlert ? '0 4px 16px rgba(217, 119, 6, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.1)',
       border: `1px solid ${isAlert ? 'rgba(251, 191, 36, 0.5)' : 'rgba(255, 255, 255, 0.3)'}`,
       zIndex: '2147483647',
-      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+      transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       opacity: '0',
       transform: 'translateY(20px) scale(0.95)',
       display: 'flex',
       alignItems: 'center',
-      gap: '10px',
-      fontSize: '14px',
-      fontWeight: '600',
-      color: '#1e293b',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      overflow: 'hidden',
+      cursor: 'pointer',
+      width: '40px' // Initial compact size
     });
+    
+    toast.addEventListener('mouseenter', () => {
+      toast.style.width = 'auto';
+      toast.style.paddingRight = '16px';
+      const textSpan = toast.querySelector('.toast-text') as HTMLElement;
+      if (textSpan) {
+        textSpan.style.opacity = '1';
+        textSpan.style.maxWidth = '300px';
+        textSpan.style.marginLeft = '4px';
+      }
+    });
+    
+    toast.addEventListener('mouseleave', () => {
+      toast.style.width = '40px';
+      toast.style.paddingRight = '0';
+      const textSpan = toast.querySelector('.toast-text') as HTMLElement;
+      if (textSpan) {
+        textSpan.style.opacity = '0';
+        textSpan.style.maxWidth = '0';
+        textSpan.style.marginLeft = '0';
+      }
+    });
+
     document.body.appendChild(toast);
   }
 
-  const icon = isError ? '❌' : (isAlert ? '💡' : '✨');
+  if (toast._timerId) {
+    clearTimeout(toast._timerId);
+  }
+
+  let icon = isError ? '❌' : (isAlert ? '💡' : '✨');
+  if (message.includes('Nano')) icon = '🤖';
+  if (message.includes('Flash-Lite')) icon = '☁️';
+  
   const color = isError ? '#ef4444' : (isAlert ? '#d97706' : '#3b82f6');
-  toast.innerHTML = `<span style="font-size: 18px;">${icon}</span> <span style="color: ${color}">${message}</span>`;
+  
+  toast.innerHTML = `
+    <div style="min-width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+      ${icon}
+    </div>
+    <span class="toast-text" style="
+      opacity: 0; 
+      max-width: 0; 
+      overflow: hidden; 
+      white-space: nowrap; 
+      color: ${color}; 
+      font-size: 13px; 
+      font-weight: 600; 
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      transition: all 0.3s ease;
+    ">
+      ${message}
+    </span>
+  `;
   
   requestAnimationFrame(() => {
     toast!.style.opacity = '1';
     toast!.style.transform = 'translateY(0) scale(1)';
   });
 
-  setTimeout(() => {
+  toast._timerId = setTimeout(() => {
     toast!.style.opacity = '0';
     toast!.style.transform = 'translateY(20px) scale(0.95)';
-  }, isAlert ? 6000 : 3000);
+    setTimeout(() => {
+      if (toast && toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, isAlert ? 8000 : 4000);
 }
 
 function isOnMonitoredSite(): boolean {
