@@ -278,58 +278,17 @@ async function checkAndAccumulateChat() {
     const currentUrl = window.location.href;
     const currentSite = window.location.hostname;
 
-    if (isMessengerSite) {
-      if (chatTexts.length > 0) {
-        let newMessages: string[] = [];
-        if (!lastMessageText) {
-          // First load, don't sync entire history
-          lastMessageText = chatTexts[chatTexts.length - 1];
-        } else {
-          const lastRaw = lastMessageText.replace(/^\[.*?\]\s*/, '');
-          let lastIdx = -1;
-          
-          // Search bottom-up within the last 30 messages to find the previous tracker
-          for (let i = chatTexts.length - 1; i >= Math.max(0, chatTexts.length - 30); i--) {
-            const currentRaw = chatTexts[i].replace(/^\[.*?\]\s*/, '');
-            if (currentRaw === lastRaw) {
-              lastIdx = i;
-              break;
-            }
-          }
-
-          if (lastIdx !== -1) {
-            newMessages = chatTexts.slice(lastIdx + 1);
-          } else {
-            // Lost track (chat switched or scrolled heavily). Reset tracker.
-            lastMessageText = chatTexts[chatTexts.length - 1];
-          }
-        }
-
-        if (newMessages.length > 0) {
-          newMessages.forEach(text => {
-            messageBuffer.push({ text, url: currentUrl, site: currentSite });
-            if (timeRegex.test(text) && !localTimeDetected) {
-              localTimeDetected = true;
-              try { chrome.runtime.sendMessage({ action: 'check_schedule', text }); } catch(e) {}
-            }
-          });
+    for (const text of chatTexts) {
+      if (text) {
+        const hash = hashStr(text);
+        if (!seenMessages.has(hash)) {
+          seenMessages.add(hash);
+          messageBuffer.push({ text, url: currentUrl, site: currentSite });
           added = true;
-          lastMessageText = chatTexts[chatTexts.length - 1];
-        }
-      }
-    } else {
-      for (const text of chatTexts) {
-        if (text) {
-          const hash = hashStr(text);
-          if (!seenMessages.has(hash)) {
-            seenMessages.add(hash);
-            messageBuffer.push({ text, url: currentUrl, site: currentSite });
-            added = true;
 
-            if (timeRegex.test(text) && !localTimeDetected) {
-              localTimeDetected = true;
-              try { chrome.runtime.sendMessage({ action: 'check_schedule', text }); } catch(e) {}
-            }
+          if (timeRegex.test(text) && !localTimeDetected) {
+            localTimeDetected = true;
+            try { chrome.runtime.sendMessage({ action: 'check_schedule', text }); } catch(e) {}
           }
         }
       }
