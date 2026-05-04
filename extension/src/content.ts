@@ -3,7 +3,7 @@ let messageBuffer: string[] = [];
 let settings = {
   autoSync: false,
   sites: ['www.messenger.com'],
-  bufferSize: 5000,
+  bufferSize: 3000,
   useCustomApi: false,
   customApiUrl: '',
   customApiKey: ''

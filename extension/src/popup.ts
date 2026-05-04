@@ -27,7 +27,7 @@ const customApiKey = document.getElementById('customApiKey') as HTMLInputElement
 const DEFAULT_SETTINGS = {
   autoSync: false,
   sites: ['www.messenger.com'],
-  bufferSize: 5000,
+  bufferSize: 3000,
   useCustomApi: false,
   customApiUrl: '',
   customApiKey: ''
