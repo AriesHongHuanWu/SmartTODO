@@ -130,6 +130,32 @@ async function processChatLogs(chatLogObjects: {text: string, url: string, site:
       console.warn("Failed to fetch existing tasks for context", dbError);
     }
 
+    if (settings.useLocalAi && typeof (self as any).ai !== 'undefined' && (self as any).ai.languageModel) {
+      updateStatus("Analyzing chat securely locally (Gemini Nano)...", false, false);
+      const capabilities = await (self as any).ai.languageModel.capabilities();
+      if (capabilities.available !== 'no') {
+        const session = await (self as any).ai.languageModel.create({
+          systemPrompt: `You are a task extraction AI. Identify NEW actionable tasks from the chat logs.
+RULES:
+1. Return output in STRICT JSON format matching this schema: { "tasks": [ { "action": "create", "title": "Task title", "context": "Reason", "category": "work", "dueDate": null, "threadUrl": "url", "siteName": "site" } ] }
+2. Categories: 'work', 'personal', 'shopping', 'meeting', 'homework', 'general'.
+3. Do not invent tasks if it is just a casual chat. Return {"tasks": []}.`
+        });
+
+        const promptText = `Existing Pending Tasks:\n${JSON.stringify(existingTasks)}\n\nChat Logs:\n${JSON.stringify(chatLogObjects)}`;
+        const localResponse = await session.prompt(promptText);
+        
+        let cleanText = localResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsedData = JSON.parse(cleanText);
+        await syncToFirestore(parsedData);
+        session.destroy();
+        return;
+      } else {
+        console.warn("Local AI is disabled or requires Chrome flags to be enabled.");
+        updateStatus("Local AI not ready. Falling back to Cloud API...", false, false);
+      }
+    }
+
     const apiUrl = settings.useCustomApi && settings.customApiUrl 
       ? settings.customApiUrl 
       : "https://smarttodo.pages.dev/api/analyze";

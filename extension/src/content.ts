@@ -1,8 +1,11 @@
 let seenMessages = new Set<string>();
 let messageBuffer: {text: string, url: string, site: string}[] = [];
+let lastMessageText: string | null = null; // 用於 Incremental Mode 紀錄上一批最後一則訊息
 
 let settings = {
   autoSync: false,
+  syncMode: 'buffer',
+  messageThreshold: 10,
   sites: ['messenger.com', 'instagram.com', 'whatsapp.com'],
   bufferSize: 3000,
   useCustomApi: false,
@@ -19,7 +22,7 @@ chrome.storage.sync.get('smarttodo_settings', (result) => {
 });
 
 chrome.storage.local.get('seen_hashes', (res) => {
-  if (res.seen_hashes) {
+  if (res.seen_hashes && Array.isArray(res.seen_hashes)) {
     res.seen_hashes.forEach((h: string) => seenMessages.add(h));
   }
 });
@@ -139,13 +142,24 @@ function updateBufferUI() {
     document.body.appendChild(container);
   }
 
-  const currentSize = messageBuffer.map(m => m.text).join(' ').length;
-  const percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
+  const isMessageMode = settings.syncMode === 'message';
+  let percent = 0;
+  let text = '';
+
+  if (isMessageMode) {
+    const currentCount = messageBuffer.length;
+    percent = Math.min(100, (currentCount / (settings.messageThreshold || 10)) * 100);
+    text = `SmartTODO: ${currentCount} / ${settings.messageThreshold || 10} msgs`;
+  } else {
+    const currentSize = messageBuffer.map(m => m.text).join(' ').length;
+    percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
+    text = `SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()} chars`;
+  }
   
   container.style.display = 'flex';
   container.innerHTML = `
     <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : '#93c5fd'};"></div>
-    <span style="letter-spacing: -0.2px;">SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
+    <span style="letter-spacing: -0.2px;">${text}</span>
   `;
 }
 
@@ -167,15 +181,19 @@ function checkAndAccumulateChat() {
   }
 
   try {
-    const messageElements = Array.from(document.querySelectorAll('div[dir="auto"]'));
+    const currentHost = window.location.hostname.toLowerCase();
+    const isMessengerSite = currentHost.includes('messenger.com') || currentHost.includes('instagram.com');
+
+    // Multi-platform selectors
+    const selectors = 'div[dir="auto"], span[dir="ltr"], .message-in, .message-out, .c-message__body';
+    const messageElements = Array.from(document.querySelectorAll(selectors));
+    
     const chatTexts = messageElements
       .map(el => {
         const text = el.textContent?.trim();
         if (!text) return null;
 
         let timeStr = "";
-        
-        // 嘗試從祖父/曾祖父節點尋找是否有時間提示屬性 (Messenger 常見作法)
         let parent = el.parentElement;
         for (let i = 0; i < 4 && parent; i++) {
            const tooltip = parent.getAttribute('data-tooltip-content');
@@ -186,13 +204,11 @@ function checkAndAccumulateChat() {
            parent = parent.parentElement;
         }
 
-        // 如果找不到特定的 tooltip，嘗試在附近找可能包含時間的 span
         if (!timeStr) {
            const nearbySpans = el.closest('[role="row"]')?.querySelectorAll('span') || [];
            for (const span of nearbySpans) {
                const spanText = span.textContent?.trim();
                if (spanText && (spanText.includes('上午') || spanText.includes('下午') || /\d{1,2}:\d{2}/.test(spanText))) {
-                   // 簡易判斷，避免把一般的訊息當作時間
                    if (spanText.length < 20) {
                        timeStr = `[${spanText}] `;
                        break;
@@ -200,70 +216,77 @@ function checkAndAccumulateChat() {
                }
            }
         }
-        
-        // 如果還是找不到，可以考慮加上當下時間當作備案 (或者不加)
-        // timeStr = timeStr || `[${new Date().toLocaleTimeString()}] `;
-
         return timeStr + text;
       })
       .filter(text => text && text.length > 0) as string[];
 
     let added = false;
+    let localTimeDetected = false;
+
+    const currentUrl = window.location.href;
+    const currentSite = window.location.hostname;
 
     if (isMessengerSite) {
-      // ＝＝＝ Messenger 模式 (Incremental Mode) ＝＝＝
-      // 這種模式下，我們只記住「最下面（最新）的一則訊息」。
-      // 當畫面更新時，我們從目前的清單中尋找上次記錄的那則訊息，並「只擷取它下方後來出現的新訊息」送去分析。
-      // 這樣可以精準抓出在同個聊天室中，使用者看到的新增內容，避免用 Set 導致「相同內容被忽略」或「順序被破壞」。
       if (chatTexts.length > 0) {
         let newMessages: string[] = [];
         if (!lastMessageText) {
-          // 第一次讀取，全部當作新訊息
           newMessages = chatTexts;
         } else {
-          // 尋找上次最後一則訊息的位置 (從後面找比較準，因為可能會有重複對話)
           const lastIdx = chatTexts.lastIndexOf(lastMessageText);
           if (lastIdx !== -1) {
-            // 只擷取最後一次紀錄之後的新訊息
             newMessages = chatTexts.slice(lastIdx + 1);
           } else {
-            // 如果找不到上次的訊息，可能是切換了聊天室，這時將目前的訊息全部視為新內容
             newMessages = chatTexts;
           }
         }
 
         if (newMessages.length > 0) {
-          messageBuffer.push(...newMessages);
+          newMessages.forEach(text => {
+            messageBuffer.push({ text, url: currentUrl, site: currentSite });
+            if (timeRegex.test(text) && !localTimeDetected) {
+              localTimeDetected = true;
+              try { chrome.runtime.sendMessage({ action: 'check_schedule', text }); } catch(e) {}
+            }
+          });
           added = true;
-          // 更新「最後一則訊息」為這一批的最後一個
           lastMessageText = chatTexts[chatTexts.length - 1];
         }
       }
     } else {
-      // ＝＝＝ 非 Messenger 網站模式 (Buffer Mode) ＝＝＝
-      // 在其他非通訊軟體的網頁中（例如一般文章、推文等），結構不會只是單純往下長。
-      // 因此沿用原本的 Buffer 邏輯：用 Set 來記錄看過的文字碎片，沒看過就加進 Buffer 累積。
-      // 滿了就送出分析，這樣才能涵蓋跳躍式閱讀或動態載入的情況。
       for (const text of chatTexts) {
-        if (text && !seenMessages.has(text)) {
-          seenMessages.add(text);
-          messageBuffer.push(text);
-          added = true;
+        if (text) {
+          const hash = hashStr(text);
+          if (!seenMessages.has(hash)) {
+            seenMessages.add(hash);
+            messageBuffer.push({ text, url: currentUrl, site: currentSite });
+            added = true;
+
+            if (timeRegex.test(text) && !localTimeDetected) {
+              localTimeDetected = true;
+              try { chrome.runtime.sendMessage({ action: 'check_schedule', text }); } catch(e) {}
+            }
+          }
         }
       }
     }
 
-    if (seenMessages.size > 1000) seenMessages.clear();
-    if (added) updateBufferUI();
+    if (seenMessages.size > 2000) {
+      const arr = Array.from(seenMessages).slice(-1000);
+      seenMessages = new Set(arr);
+    }
+
+    if (added) {
+      chrome.storage.local.set({ seen_hashes: Array.from(seenMessages).slice(-500) });
+      updateBufferUI();
+    }
 
     const isMessageMode = settings.syncMode === 'message';
     const shouldSync = isMessageMode 
       ? messageBuffer.length >= (settings.messageThreshold || 10)
-      : messageBuffer.join(' ').length >= settings.bufferSize;
+      : messageBuffer.map(m => m.text).join(' ').length >= settings.bufferSize;
 
     if (shouldSync) {
       try {
-        // 當緩衝區滿了，才送出做 AI 分析
         chrome.runtime.sendMessage({
           action: 'process_chat',
           chatLog: [...messageBuffer]
@@ -275,5 +298,5 @@ function checkAndAccumulateChat() {
   } catch (e) {}
 }
 
-setInterval(checkAndAccumulateChat, 5000);
+setInterval(checkAndAccumulateChat, 3000);
 updateBufferUI();

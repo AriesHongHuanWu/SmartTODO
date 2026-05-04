@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const messageRange = document.getElementById('messageRange') as HTMLInputElement;
   const messageVal = document.getElementById('messageVal')!;
 
+  const useLocalAi = document.getElementById('useLocalAi') as HTMLInputElement;
   const useCustomApi = document.getElementById('useCustomApi') as HTMLInputElement;
   const customApiFields = document.getElementById('customApiFields')!;
   const customApiUrl = document.getElementById('customApiUrl') as HTMLInputElement;
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageThreshold: 10,
     sites: ['www.messenger.com', 'instagram.com'],
     bufferSize: 3000,
+    useLocalAi: false,
     useCustomApi: false,
     customApiUrl: '',
     customApiKey: ''
@@ -76,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageRange.value = String(currentSettings.messageThreshold || 10);
     messageVal.textContent = String(currentSettings.messageThreshold || 10);
 
+    useLocalAi.checked = currentSettings.useLocalAi;
     useCustomApi.checked = currentSettings.useCustomApi;
     customApiFields.classList.toggle('hidden', !currentSettings.useCustomApi);
     customApiUrl.value = currentSettings.customApiUrl;
@@ -107,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentSettings.syncMode = modeMessage.checked ? 'message' : 'buffer';
     currentSettings.bufferSize = parseInt(bufferRange.value);
     currentSettings.messageThreshold = parseInt(messageRange.value);
+    currentSettings.useLocalAi = useLocalAi.checked;
     currentSettings.useCustomApi = useCustomApi.checked;
     currentSettings.customApiUrl = customApiUrl.value.trim();
     currentSettings.customApiKey = customApiKey.value.trim();
