@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "zip-extension": "node scripts/zip-extension.js",
-    "install-all": "npm install && cd extension && npm install && cd ../web-app && npm install"
+    "install-all": "npm install && cd extension && npm install && cd ../web-app && npm install",
+    "build": "cd extension && npm install && npm run build && cd .. && npm run zip-extension && cd web-app && npm install && npm run build"
   },
   "devDependencies": {
     "archiver": "^7.0.1"
