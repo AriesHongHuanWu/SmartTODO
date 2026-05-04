@@ -90,13 +90,25 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
 
 async function handleNanoMapReduce(chatLog: any[]) {
   try {
-    const ai = (self as any).ai || (self as any).model;
-    if (!ai || !ai.languageModel) {
-      updateStatus("❌ Local AI API missing in Background. Check Flags.", true, true);
+    // Brute-force detection of the AI API (it moves around in different Chrome versions)
+    const ai = (self as any).ai || 
+               (self as any).model || 
+               (chrome as any).ai || 
+               (chrome as any).aiOriginTrial || 
+               (self as any).chrome?.ai;
+               
+    if (!ai) {
+      updateStatus("❌ Local AI API (ai) is totally missing. Chrome Version problem?", true, true);
       return;
     }
 
-    const capabilities = await ai.languageModel.capabilities();
+    const modelApi = ai.languageModel || ai.assistant || ai;
+    if (!modelApi || typeof modelApi.capabilities !== 'function') {
+      updateStatus("❌ AI LanguageModel API not found. Model might not be ready.", true, true);
+      return;
+    }
+
+    const capabilities = await modelApi.capabilities();
     if (capabilities.available === 'no') {
       updateStatus("❌ Local AI not supported on this device.", true, true);
       return;
@@ -109,7 +121,7 @@ async function handleNanoMapReduce(chatLog: any[]) {
       updateStatus("⏳ Downloading AI Model (2GB)...", false, false);
     }
 
-    session = await ai.languageModel.create({
+    session = await modelApi.create({
       systemPrompt: "Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{\"title\": \"Task\", \"category\": \"work|personal|general\", \"time\": \"time\"}]. If no tasks, output []. Do not add conversational text.",
       monitor(m: any) {
         m.addEventListener('downloadprogress', (e: any) => {
@@ -145,7 +157,7 @@ async function handleNanoMapReduce(chatLog: any[]) {
 
     if (nanoChunkCount >= 5) {
       updateStatus("🤖 Nano Map-Reduce: Merging results...", false, false);
-      const mergeSession = await ai.languageModel.create({
+      const mergeSession = await modelApi.create({
         systemPrompt: "Deduplicate and merge tasks. Return STRICTLY a JSON array of objects. Schema: [{\"title\": \"...\", \"category\": \"...\", \"time\": \"...\", \"threadUrl\": \"...\", \"siteName\": \"...\"}]."
       });
       const mergedRes = await mergeSession.prompt(JSON.stringify(nanoPendingTasks));
