@@ -30,6 +30,7 @@ let settings = {
   autoSync: false,
   sites: ['www.messenger.com'],
   bufferSize: 3000,
+  useLocalAi: false,
   useCustomApi: false,
   customApiUrl: '',
   customApiKey: ''
@@ -170,7 +171,7 @@ RULES:
       method: "POST",
       headers,
       body: JSON.stringify({
-        chatLogs,
+        chatLogs: chatLogObjects,
         userId: currentUser.uid,
         existingTasks
       })
