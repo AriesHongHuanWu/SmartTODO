@@ -53,7 +53,10 @@ If you detect that any of these tasks have CHANGED (e.g. rescheduled, details mo
 `;
     }
 
-    const prompt = `You are a task extraction AI. Analyze the chat log below.
+    const now = new Date().toISOString();
+    const prompt = `You are a task extraction AI. The current date and time is: ${now}
+
+Analyze the chat log below.
 
 RULES:
 1. Identify NEW actionable tasks. For each, provide: title, context, category, and dueDate.
