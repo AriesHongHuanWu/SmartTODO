@@ -61,10 +61,12 @@ function renderSettings() {
   
   if (currentSettings.syncMode === 'message') {
     modeMessage.checked = true;
+    modeBuffer.checked = false;
     bufferSettings.classList.add('hidden');
     messageSettings.classList.remove('hidden');
   } else {
     modeBuffer.checked = true;
+    modeMessage.checked = false;
     bufferSettings.classList.remove('hidden');
     messageSettings.classList.add('hidden');
   }
@@ -161,15 +163,19 @@ addSiteBtn.addEventListener('click', () => {
 autoSyncToggle.addEventListener('change', saveSettings);
 
 modeBuffer.addEventListener('change', () => {
-  bufferSettings.classList.remove('hidden');
-  messageSettings.classList.add('hidden');
-  saveSettings();
+  if (modeBuffer.checked) {
+    bufferSettings.classList.remove('hidden');
+    messageSettings.classList.add('hidden');
+    saveSettings();
+  }
 });
 
 modeMessage.addEventListener('change', () => {
-  bufferSettings.classList.add('hidden');
-  messageSettings.classList.remove('hidden');
-  saveSettings();
+  if (modeMessage.checked) {
+    bufferSettings.classList.add('hidden');
+    messageSettings.classList.remove('hidden');
+    saveSettings();
+  }
 });
 
 bufferRange.addEventListener('input', () => {
