@@ -1,4 +1,5 @@
 import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc, Timestamp } from "firebase/firestore";
+import { signInWithCustomToken } from "firebase/auth";
 import { auth, db } from "./firebase";
 
 // Ensure auth is loaded
@@ -9,6 +10,20 @@ auth.onAuthStateChanged((user) => {
   currentUser = user;
   authInitialized = true;
 });
+
+// Listen for external messages (from Web App) to sync login state
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  if (request.action === 'sync_auth_token') {
+    // The web app sends a custom token or signs in immediately on its end and passes it here.
+    // Actually, passing session from web is easiest if we implement signInWithCustomToken on backend.
+    // For now, simpler: we can store the token or state directly.
+    signInWithCustomToken(auth, request.customToken)
+      .then(() => sendResponse({ success: true }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true; // Keep channel open for async response
+  }
+});
+
 
 // Settings
 let settings = {
