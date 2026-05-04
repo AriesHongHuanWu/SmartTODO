@@ -18,7 +18,7 @@ chrome.storage.sync.get('smarttodo_settings', (result) => {
 });
 
 // Listen for settings updates and toast requests
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
   if (request.action === 'settings_updated') {
     settings = { ...settings, ...request.settings };
     updateBufferUI();
