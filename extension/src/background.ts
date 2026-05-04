@@ -266,16 +266,21 @@ function updateStatus(status: string, error: boolean, done: boolean) {
   }
 
   // 2. Send to current active tab to show floating toast
-  if (status.includes("Analyzing") || status.includes("Sync complete") || error) {
+  const showToast = status.toLowerCase().includes("analyzing") || 
+                    status.includes("Nano") || 
+                    status.includes("Flash-Lite") || 
+                    status.includes("Sync complete") || 
+                    status.includes("No tasks") || 
+                    error;
+                    
+  if (showToast) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, {
           action: 'show_toast',
           message: status,
           isError: error
-        }).catch(() => {
-          // Content script might not be injected on this specific page, ignore
-        });
+        }).catch(() => {});
       }
     });
   }

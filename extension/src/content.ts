@@ -281,13 +281,15 @@ function checkAndAccumulateChat() {
       if (chatTexts.length > 0) {
         let newMessages: string[] = [];
         if (!lastMessageText) {
-          newMessages = chatTexts;
+          // First load, don't sync entire history
+          lastMessageText = chatTexts[chatTexts.length - 1];
         } else {
           const lastIdx = chatTexts.lastIndexOf(lastMessageText);
           if (lastIdx !== -1) {
             newMessages = chatTexts.slice(lastIdx + 1);
           } else {
-            newMessages = chatTexts;
+            // Lost track (chat switched or scrolled heavily). Reset tracker to avoid spamming historical tasks.
+            lastMessageText = chatTexts[chatTexts.length - 1];
           }
         }
 
