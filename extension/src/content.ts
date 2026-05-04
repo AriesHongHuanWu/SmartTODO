@@ -8,6 +8,7 @@ let settings = {
   messageThreshold: 10,
   sites: ['messenger.com', 'instagram.com', 'whatsapp.com'],
   bufferSize: 3000,
+  useLocalAi: false,
   useCustomApi: false,
   customApiUrl: '',
   customApiKey: ''
