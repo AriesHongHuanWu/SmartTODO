@@ -16,10 +16,13 @@ chrome.storage.sync.get('smarttodo_settings', (result) => {
   }
 });
 
-// Listen for settings updates
+// Listen for settings updates and toast requests
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'settings_updated') {
     settings = { ...settings, ...request.settings };
+  }
+  if (request.action === 'show_toast') {
+    showToast(request.message, request.isError);
   }
   if (request.action === 'extract_chat') {
     if (messageBuffer.length > 0) {
@@ -34,6 +37,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 });
+
+function showToast(message: string, isError = false) {
+  const toastId = 'smarttodo-toast';
+  let toast = document.getElementById(toastId);
+  
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = toastId;
+    Object.assign(toast.style, {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      padding: '12px 20px',
+      borderRadius: '12px',
+      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      backdropFilter: 'blur(10px)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+      border: '1px solid rgba(255, 255, 255, 0.3)',
+      zIndex: '999999',
+      transition: 'all 0.3s ease',
+      opacity: '0',
+      transform: 'translateY(20px)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      fontSize: '14px',
+      fontWeight: '500',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    });
+    document.body.appendChild(toast);
+  }
+
+  const icon = isError ? '❌' : '✨';
+  const color = isError ? '#ef4444' : '#3b82f6';
+  
+  toast.innerHTML = `<span style="font-size: 18px;">${icon}</span> <span style="color: ${color}">${message}</span>`;
+  
+  // Show
+  requestAnimationFrame(() => {
+    toast!.style.opacity = '1';
+    toast!.style.transform = 'translateY(0)';
+  });
+
+  // Hide after 3 seconds
+  setTimeout(() => {
+    toast!.style.opacity = '0';
+    toast!.style.transform = 'translateY(20px)';
+  }, 3000);
+}
 
 function isOnMonitoredSite(): boolean {
   const currentHost = window.location.hostname;

@@ -216,8 +216,24 @@ async function syncToFirestore(data: any) {
 
 function updateStatus(status: string, error: boolean, done: boolean) {
   try {
+    // 1. Send to popup if open
     chrome.runtime.sendMessage({ action: 'sync_status', status, error, done });
   } catch (e) {
     // Popup might be closed, ignore
+  }
+
+  // 2. Send to current active tab to show floating toast
+  if (status.includes("Analyzing") || status.includes("Sync complete") || error) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'show_toast',
+          message: status,
+          isError: error
+        }).catch(() => {
+          // Content script might not be injected on this specific page, ignore
+        });
+      }
+    });
   }
 }
