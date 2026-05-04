@@ -224,7 +224,7 @@ function hashStr(str: string) {
   return hash.toString();
 }
 
-function checkAndAccumulateChat() {
+async function checkAndAccumulateChat() {
   if (!chrome.runtime?.id) return;
   if (!settings.autoSync || !isOnMonitoredSite()) {
     updateBufferUI();
@@ -340,12 +340,50 @@ function checkAndAccumulateChat() {
 
     if (shouldSync) {
       try {
-        chrome.runtime.sendMessage({
-          action: 'process_chat',
-          chatLog: [...messageBuffer]
-        });
+        let finalBuffer = [...messageBuffer];
         messageBuffer = [];
         updateBufferUI();
+
+        let useNano = settings.useLocalAi;
+        if (useNano && (window as any).ai && (window as any).ai.languageModel) {
+          showToast("🤖 Nano is filtering messages locally...");
+          try {
+            const capabilities = await (window as any).ai.languageModel.capabilities();
+            if (capabilities.available !== 'no') {
+              const session = await (window as any).ai.languageModel.create({
+                systemPrompt: `You are a strict binary classifier. Determine if the message contains an actionable task, a todo, a meeting arrangement, a promise to do something, or a schedule. Reply ONLY with "YES" or "NO".`
+              });
+
+              const filteredLogs = [];
+              for (const log of finalBuffer) {
+                try {
+                  const res = await session.prompt(log.text);
+                  if (res.toUpperCase().includes('YES')) {
+                    filteredLogs.push(log);
+                  }
+                } catch(e) {
+                  filteredLogs.push(log);
+                }
+              }
+              session.destroy();
+              
+              if (filteredLogs.length === 0) {
+                showToast("✨ Nano filtered casual chat. No tasks found.");
+                return; 
+              }
+              
+              finalBuffer = filteredLogs;
+              showToast(`☁️ Nano found ${filteredLogs.length} potential tasks. Sending to Flash-Lite...`);
+            }
+          } catch(e) {
+            console.warn("Nano error in content script:", e);
+          }
+        }
+
+        chrome.runtime.sendMessage({
+          action: 'process_chat',
+          chatLog: finalBuffer
+        });
       } catch (e) {}
     }
   } catch (e) {}

@@ -134,43 +134,7 @@ async function processChatLogs(chatLogObjects: {text: string, url: string, site:
     }
 
     let finalChatLogs = chatLogObjects;
-
-    if (settings.useLocalAi && typeof (self as any).ai !== 'undefined' && (self as any).ai.languageModel) {
-      updateStatus("🤖 Nano is filtering messages locally...", false, false);
-      const capabilities = await (self as any).ai.languageModel.capabilities();
-      if (capabilities.available !== 'no') {
-        const session = await (self as any).ai.languageModel.create({
-          systemPrompt: `You are a strict binary classifier. Determine if the message contains an actionable task, a todo, a meeting arrangement, a promise to do something, or a schedule. Reply ONLY with "YES" or "NO".`
-        });
-
-        const filteredLogs = [];
-        for (const log of chatLogObjects) {
-          try {
-            const res = await session.prompt(log.text);
-            if (res.toUpperCase().includes('YES')) {
-              filteredLogs.push(log);
-            }
-          } catch(e) {
-            // If Nano fails on a specific message, include it to be safe
-            filteredLogs.push(log);
-          }
-        }
-        session.destroy();
-        
-        if (filteredLogs.length === 0) {
-          updateStatus("✨ Nano filtered casual chat. No tasks found.", false, true);
-          return;
-        }
-        
-        finalChatLogs = filteredLogs;
-        updateStatus(`☁️ Nano found ${filteredLogs.length} potential tasks. Sending to Flash-Lite...`, false, false);
-      } else {
-        console.warn("Local AI is disabled or requires Chrome flags to be enabled.");
-        updateStatus("☁️ Local AI not ready. Flash-Lite is analyzing...", false, false);
-      }
-    } else {
-      updateStatus("☁️ Flash-Lite is analyzing...", false, false);
-    }
+    updateStatus("☁️ Flash-Lite is analyzing...", false, false);
 
     const apiUrl = settings.useCustomApi && settings.customApiUrl 
       ? settings.customApiUrl 
