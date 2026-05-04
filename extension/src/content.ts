@@ -308,7 +308,7 @@ async function checkAndAccumulateChat() {
 
           if (timeRegex.test(text) && !localTimeDetected) {
             localTimeDetected = true;
-            try { chrome.runtime.sendMessage({ action: 'check_schedule', text }); } catch(e) {}
+            try { chrome.runtime.sendMessage({ action: 'check_schedule', text }).catch(()=>{}); } catch(e) {}
           }
         }
       }
@@ -344,11 +344,19 @@ async function checkAndAccumulateChat() {
         updateBufferUI();
 
         let useNano = settings.useLocalAi;
-        if (useNano && (window as any).ai && (window as any).ai.languageModel) {
+        if (useNano) {
+          if (!(window as any).ai || !(window as any).ai.languageModel) {
+            showToast("❌ Local AI not supported or enabled in flags. Please enable Chrome AI flags.", true);
+            return;
+          }
+          
           showToast("🤖 Nano is extracting tasks locally...", false, false);
           try {
             const capabilities = await (window as any).ai.languageModel.capabilities();
-            if (capabilities.available !== 'no') {
+            if (capabilities.available === 'no') {
+              showToast("❌ Local AI model not downloaded or unavailable.", true);
+              return;
+            }
               const session = await (window as any).ai.languageModel.create({
                 systemPrompt: `Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "extracted time if any"}]. If no tasks, output []. Do not add any conversational text.`
               });
@@ -398,7 +406,7 @@ async function checkAndAccumulateChat() {
                 chrome.runtime.sendMessage({
                   action: 'sync_nano_tasks',
                   tasks: finalTasks
-                });
+                }).catch(()=>{});
 
                 nanoPendingTasks = [];
                 nanoChunkCount = 0;
@@ -406,7 +414,6 @@ async function checkAndAccumulateChat() {
                 showToast(`🤖 Nano extracted chunk ${nanoChunkCount}/5. Accumulating...`);
               }
               return; 
-            }
           } catch(e) {
             console.warn("Nano error in content script:", e);
           }
@@ -415,7 +422,7 @@ async function checkAndAccumulateChat() {
         chrome.runtime.sendMessage({
           action: 'process_chat',
           chatLog: finalBuffer
-        });
+        }).catch(()=>{});
       } catch (e) {}
     }
   } catch (e) {}
