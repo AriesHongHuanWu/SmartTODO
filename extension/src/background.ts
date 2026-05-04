@@ -90,7 +90,6 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
 
 async function handleNanoMapReduce(chatLog: any[]) {
   try {
-    // Brute-force detection of the AI API (it moves around in different Chrome versions)
     const ai = (self as any).ai || 
                (self as any).model || 
                (chrome as any).ai || 
@@ -98,19 +97,22 @@ async function handleNanoMapReduce(chatLog: any[]) {
                (self as any).chrome?.ai;
                
     if (!ai) {
-      updateStatus("❌ Local AI API (ai) is totally missing. Chrome Version problem?", true, true);
+      updateStatus("⚠️ Local AI missing. Falling back to Cloud Flash-Lite...", false, false);
+      processChatLogs(chatLog);
       return;
     }
 
     const modelApi = ai.languageModel || ai.assistant || ai;
     if (!modelApi || typeof modelApi.capabilities !== 'function') {
-      updateStatus("❌ AI LanguageModel API not found. Model might not be ready.", true, true);
+      updateStatus("⚠️ AI Model not ready. Falling back to Cloud Flash-Lite...", false, false);
+      processChatLogs(chatLog);
       return;
     }
 
     const capabilities = await modelApi.capabilities();
     if (capabilities.available === 'no') {
-      updateStatus("❌ Local AI not supported on this device.", true, true);
+      updateStatus("⚠️ Hardware not supported. Falling back to Cloud Flash-Lite...", false, false);
+      processChatLogs(chatLog);
       return;
     }
 
