@@ -1,6 +1,9 @@
 let seenMessages = new Set<string>();
 let messageBuffer: {text: string, url: string, site: string}[] = [];
-let lastMessageText: string | null = null; // 用於 Incremental Mode 紀錄上一批最後一則訊息
+
+// Nano Map-Reduce State
+let nanoPendingTasks: any[] = [];
+let nanoChunkCount = 0;
 
 let settings = {
   autoSync: false,
@@ -20,6 +23,13 @@ chrome.storage.sync.get('smarttodo_settings', (result) => {
     settings = { ...settings, ...result.smarttodo_settings };
   }
   updateBufferUI();
+});
+
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync' && changes.smarttodo_settings) {
+    settings = { ...settings, ...(changes.smarttodo_settings.newValue as any) };
+    updateBufferUI();
+  }
 });
 
 chrome.storage.local.get('seen_hashes', (res) => {
@@ -195,22 +205,32 @@ function updateBufferUI() {
   }
 
   const isMessageMode = settings.syncMode === 'message';
+  
+  // Force clamping for Nano Map-Reduce
+  let effectiveBufSize = settings.bufferSize;
+  let effectiveMsgThreshold = settings.messageThreshold || 10;
+  
+  if (settings.useLocalAi) {
+    effectiveBufSize = Math.min(settings.bufferSize, 800);
+    effectiveMsgThreshold = Math.min(effectiveMsgThreshold, 5);
+  }
+
   let percent = 0;
   let text = '';
 
   if (isMessageMode) {
     const currentCount = messageBuffer.length;
-    percent = Math.min(100, (currentCount / (settings.messageThreshold || 10)) * 100);
-    text = `SmartTODO: ${currentCount} / ${settings.messageThreshold || 10} msgs`;
+    percent = Math.min(100, (currentCount / effectiveMsgThreshold) * 100);
+    text = `SmartTODO: ${currentCount} / ${effectiveMsgThreshold} msgs`;
   } else {
     const currentSize = messageBuffer.map(m => m.text).join(' ').length;
-    percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
-    text = `SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()} chars`;
+    percent = Math.min(100, (currentSize / effectiveBufSize) * 100);
+    text = `SmartTODO: ${currentSize.toLocaleString()} / ${effectiveBufSize.toLocaleString()} chars`;
   }
   
   container.style.display = 'flex';
   container.innerHTML = `
-    <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : '#93c5fd'};"></div>
+    <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : (settings.useLocalAi ? '#10b981' : '#3b82f6')}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : (settings.useLocalAi ? '#6ee7b7' : '#93c5fd')};"></div>
     <span style="letter-spacing: -0.2px;">${text}</span>
   `;
 }
@@ -305,9 +325,17 @@ async function checkAndAccumulateChat() {
     }
 
     const isMessageMode = settings.syncMode === 'message';
+    let effectiveBufSize = settings.bufferSize;
+    let effectiveMsgThreshold = settings.messageThreshold || 10;
+    
+    if (settings.useLocalAi) {
+      effectiveBufSize = Math.min(settings.bufferSize, 800);
+      effectiveMsgThreshold = Math.min(effectiveMsgThreshold, 5);
+    }
+
     const shouldSync = isMessageMode 
-      ? messageBuffer.length >= (settings.messageThreshold || 10)
-      : messageBuffer.map(m => m.text).join(' ').length >= settings.bufferSize;
+      ? messageBuffer.length >= effectiveMsgThreshold
+      : messageBuffer.map(m => m.text).join(' ').length >= effectiveBufSize;
 
     if (shouldSync) {
       try {
@@ -317,34 +345,67 @@ async function checkAndAccumulateChat() {
 
         let useNano = settings.useLocalAi;
         if (useNano && (window as any).ai && (window as any).ai.languageModel) {
-          showToast("🤖 Nano is filtering messages locally...");
+          showToast("🤖 Nano is extracting tasks locally...", false, false);
           try {
             const capabilities = await (window as any).ai.languageModel.capabilities();
             if (capabilities.available !== 'no') {
               const session = await (window as any).ai.languageModel.create({
-                systemPrompt: `You are a strict binary classifier. Determine if the message contains an actionable task, a todo, a meeting arrangement, a promise to do something, or a schedule. Reply ONLY with "YES" or "NO".`
+                systemPrompt: `Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "extracted time if any"}]. If no tasks, output []. Do not add any conversational text.`
               });
 
-              const filteredLogs = [];
-              for (const log of finalBuffer) {
-                try {
-                  const res = await session.prompt(log.text);
-                  if (res.toUpperCase().includes('YES')) {
-                    filteredLogs.push(log);
-                  }
-                } catch(e) {
-                  filteredLogs.push(log);
-                }
-              }
+              const chatText = finalBuffer.map(b => b.text).join('\n');
+              const res = await session.prompt(chatText);
               session.destroy();
               
-              if (filteredLogs.length === 0) {
-                showToast("✨ Nano filtered casual chat. No tasks found.");
-                return; 
+              let parsedTasks = [];
+              try {
+                const cleanJson = res.replace(/```json/g, '').replace(/```/g, '').trim();
+                parsedTasks = JSON.parse(cleanJson);
+              } catch (e) {
+                console.warn("Nano failed to output valid JSON:", res);
+                showToast("❌ Nano JSON formatting error. Chunk skipped.", true);
+                return;
               }
-              
-              finalBuffer = filteredLogs;
-              showToast(`☁️ Nano found ${filteredLogs.length} potential tasks. Sending to Flash-Lite...`);
+
+              if (!Array.isArray(parsedTasks) || parsedTasks.length === 0) {
+                showToast("✨ Nano found no tasks in this chunk.");
+                return;
+              }
+
+              // Add context
+              parsedTasks = parsedTasks.map(t => ({ ...t, threadUrl: finalBuffer[0]?.url, siteName: finalBuffer[0]?.site }));
+              nanoPendingTasks.push(...parsedTasks);
+              nanoChunkCount++;
+
+              if (nanoChunkCount >= 5) {
+                showToast("🤖 Nano Map-Reduce: Deduplicating accumulated tasks...", false, false);
+                const mergeSession = await (window as any).ai.languageModel.create({
+                  systemPrompt: `You are a strict task deduplication AI. You will receive a JSON array of tasks extracted over time. Remove duplicates and merge similar tasks (prioritizing the most recent/detailed one). Return the final clean list as a STRICT JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "time", "threadUrl": "url", "siteName": "site"}]. Do not add conversational text.`
+                });
+
+                const mergedRes = await mergeSession.prompt(JSON.stringify(nanoPendingTasks));
+                mergeSession.destroy();
+
+                let finalTasks = [];
+                try {
+                  const cleanMerged = mergedRes.replace(/```json/g, '').replace(/```/g, '').trim();
+                  finalTasks = JSON.parse(cleanMerged);
+                } catch(e) {
+                  console.warn("Nano merge failed, using raw accumulated tasks");
+                  finalTasks = nanoPendingTasks;
+                }
+
+                chrome.runtime.sendMessage({
+                  action: 'sync_nano_tasks',
+                  tasks: finalTasks
+                });
+
+                nanoPendingTasks = [];
+                nanoChunkCount = 0;
+              } else {
+                showToast(`🤖 Nano extracted chunk ${nanoChunkCount}/5. Accumulating...`);
+              }
+              return; 
             }
           } catch(e) {
             console.warn("Nano error in content script:", e);

@@ -73,6 +73,9 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   if (request.action === 'check_schedule') {
     handleCheckSchedule(request.text);
   }
+  if (request.action === 'sync_nano_tasks') {
+    handleNanoSync(request.tasks);
+  }
   return false;
 });
 
@@ -219,6 +222,21 @@ async function syncToFirestore(data: any) {
     console.error("SmartTODO sync error:", error);
     updateStatus("Error syncing to DB: " + (error.message || "Unknown"), true, true);
   }
+}
+
+async function handleNanoSync(tasks: any[]) {
+  const user = await waitForAuth();
+  if (!user) return;
+  const validTasks = tasks.map(t => ({
+    action: t.action || 'create',
+    title: t.title || 'Untitled Task',
+    context: t.context || 'Extracted via Nano Map-Reduce',
+    category: t.category || 'general',
+    dueDate: t.time || null,
+    threadUrl: t.threadUrl || null,
+    siteName: t.siteName || null
+  }));
+  await syncToFirestore({ tasks: validTasks });
 }
 
 function updateStatus(status: string, error: boolean, done: boolean) {

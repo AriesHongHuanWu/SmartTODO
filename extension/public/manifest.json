@@ -15,7 +15,8 @@
     "matches": [
       "http://localhost:3000/*",
       "https://*.vercel.app/*",
-      "https://*.smarttodo.com/*"
+      "https://*.smarttodo.com/*",
+      "https://smarttodo.pages.dev/*"
     ]
   },
   "action": {
