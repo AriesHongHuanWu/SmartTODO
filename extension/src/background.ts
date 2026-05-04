@@ -29,6 +29,8 @@ chrome.runtime.onMessageExternal.addListener((request, _sender, sendResponse) =>
 // Settings
 let settings = {
   autoSync: false,
+  syncMode: 'buffer',
+  messageThreshold: 10,
   sites: ['www.messenger.com'],
   bufferSize: 3000,
   useLocalAi: false,
@@ -63,9 +65,16 @@ async function waitForAuth() {
   });
 }
 
+let nanoPendingTasks: any[] = [];
+let nanoChunkCount = 0;
+
 chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   if (request.action === 'process_chat') {
-    processChatLogs(request.chatLog);
+    if (settings.useLocalAi) {
+      handleNanoMapReduce(request.chatLog);
+    } else {
+      processChatLogs(request.chatLog);
+    }
   }
   if (request.action === 'settings_updated') {
     settings = { ...settings, ...request.settings };
@@ -78,6 +87,90 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   }
   return false;
 });
+
+async function handleNanoMapReduce(chatLog: any[]) {
+  try {
+    const ai = (self as any).ai || (self as any).model;
+    if (!ai || !ai.languageModel) {
+      updateStatus("❌ Local AI API missing in Background. Check Flags.", true, true);
+      return;
+    }
+
+    const capabilities = await ai.languageModel.capabilities();
+    if (capabilities.available === 'no') {
+      updateStatus("❌ Local AI not supported on this device.", true, true);
+      return;
+    }
+
+    updateStatus(`🤖 Nano is extracting chunk ${nanoChunkCount + 1}/5...`, false, false);
+
+    let session;
+    if (capabilities.available === 'after-download') {
+      updateStatus("⏳ Downloading AI Model (2GB)...", false, false);
+    }
+
+    session = await ai.languageModel.create({
+      systemPrompt: "Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{\"title\": \"Task\", \"category\": \"work|personal|general\", \"time\": \"time\"}]. If no tasks, output []. Do not add conversational text.",
+      monitor(m: any) {
+        m.addEventListener('downloadprogress', (e: any) => {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          updateStatus(`⏳ Downloading AI Model: ${pct}%...`, false, false);
+        });
+      }
+    });
+
+    const chatText = chatLog.map(b => b.text).join('\n');
+    const res = await session.prompt(chatText);
+    session.destroy();
+
+    let parsedTasks = [];
+    try {
+      const cleanJson = res.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsedTasks = JSON.parse(cleanJson);
+    } catch (e) {
+      updateStatus("❌ Nano JSON error. Retrying next chunk...", true, false);
+      return;
+    }
+
+    if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+      parsedTasks = parsedTasks.map(t => ({ 
+        ...t, 
+        threadUrl: chatLog[0]?.url, 
+        siteName: chatLog[0]?.site 
+      }));
+      nanoPendingTasks.push(...parsedTasks);
+    }
+
+    nanoChunkCount++;
+
+    if (nanoChunkCount >= 5) {
+      updateStatus("🤖 Nano Map-Reduce: Merging results...", false, false);
+      const mergeSession = await ai.languageModel.create({
+        systemPrompt: "Deduplicate and merge tasks. Return STRICTLY a JSON array of objects. Schema: [{\"title\": \"...\", \"category\": \"...\", \"time\": \"...\", \"threadUrl\": \"...\", \"siteName\": \"...\"}]."
+      });
+      const mergedRes = await mergeSession.prompt(JSON.stringify(nanoPendingTasks));
+      mergeSession.destroy();
+
+      let finalTasks = [];
+      try {
+        const cleanMerged = mergedRes.replace(/```json/g, '').replace(/```/g, '').trim();
+        finalTasks = JSON.parse(cleanMerged);
+      } catch(e) {
+        finalTasks = nanoPendingTasks;
+      }
+
+      await handleNanoSync(finalTasks);
+      nanoPendingTasks = [];
+      nanoChunkCount = 0;
+    } else {
+      updateStatus(`✨ Chunk ${nanoChunkCount}/5 saved. Waiting for more data...`, false, true);
+    }
+  } catch (error: any) {
+    console.error("Nano background error:", error);
+    updateStatus("❌ Nano error: " + (error.message || "Unknown"), true, true);
+  }
+}
+
 
 // Real-time time detection alert logic
 async function handleCheckSchedule(text: string) {

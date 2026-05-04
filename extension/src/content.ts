@@ -1,9 +1,6 @@
 let seenMessages = new Set<string>();
 let messageBuffer: {text: string, url: string, site: string}[] = [];
 
-// Nano Map-Reduce State
-let nanoPendingTasks: any[] = [];
-let nanoChunkCount = 0;
 
 let settings = {
   autoSync: false,
@@ -343,107 +340,14 @@ async function checkAndAccumulateChat() {
         messageBuffer = [];
         updateBufferUI();
 
-        let useNano = settings.useLocalAi;
-        if (useNano) {
-          const ai = (window as any).ai || (window as any).model;
-          if (!ai) {
-            showToast("❌ Local AI (window.ai) is missing. Check Chrome Flags.", true);
-            return;
-          }
-          
-          const modelApi = ai.languageModel || ai; // Some versions use window.ai.languageModel, some use window.model
-          if (!modelApi || typeof modelApi.capabilities !== 'function') {
-            showToast("❌ Prompt API (languageModel) not ready. Check chrome://components", true);
-            return;
-          }
-          
-          showToast("🤖 Nano is extracting tasks locally...", false, false);
-          try {
-            const capabilities = await modelApi.capabilities();
-            if (capabilities.available === 'no') {
-              showToast("❌ Local AI model not supported on this device.", true);
-              return;
-            }
-
-            let session;
-            if (capabilities.available === 'after-download') {
-              showToast("⏳ Downloading Gemini Nano Model (2GB)... Please keep this tab open.", false, true);
-            }
-            
-            session = await modelApi.create({
-              systemPrompt: `Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "extracted time if any"}]. If no tasks, output []. Do not add any conversational text.`,
-              monitor(m: any) {
-                m.addEventListener('downloadprogress', (e: any) => {
-                  if (e.total > 0) {
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    showToast(`⏳ Downloading AI Model: ${pct}%...`);
-                  }
-                });
-              }
-            });
-              const chatText = finalBuffer.map(b => b.text).join('\n');
-              const res = await session.prompt(chatText);
-              session.destroy();
-              
-              let parsedTasks = [];
-              try {
-                const cleanJson = res.replace(/```json/g, '').replace(/```/g, '').trim();
-                parsedTasks = JSON.parse(cleanJson);
-              } catch (e) {
-                console.warn("Nano failed to output valid JSON:", res);
-                showToast("❌ Nano JSON formatting error. Chunk skipped.", true);
-                return;
-              }
-
-              if (!Array.isArray(parsedTasks) || parsedTasks.length === 0) {
-                showToast("✨ Nano found no tasks in this chunk.");
-                return;
-              }
-
-              // Add context
-              parsedTasks = parsedTasks.map(t => ({ ...t, threadUrl: finalBuffer[0]?.url, siteName: finalBuffer[0]?.site }));
-              nanoPendingTasks.push(...parsedTasks);
-              nanoChunkCount++;
-
-              if (nanoChunkCount >= 5) {
-                showToast("🤖 Nano Map-Reduce: Deduplicating accumulated tasks...", false, false);
-                const mergeSession = await (window as any).ai.languageModel.create({
-                  systemPrompt: `You are a strict task deduplication AI. You will receive a JSON array of tasks extracted over time. Remove duplicates and merge similar tasks (prioritizing the most recent/detailed one). Return the final clean list as a STRICT JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "time", "threadUrl": "url", "siteName": "site"}]. Do not add conversational text.`
-                });
-
-                const mergedRes = await mergeSession.prompt(JSON.stringify(nanoPendingTasks));
-                mergeSession.destroy();
-
-                let finalTasks = [];
-                try {
-                  const cleanMerged = mergedRes.replace(/```json/g, '').replace(/```/g, '').trim();
-                  finalTasks = JSON.parse(cleanMerged);
-                } catch(e) {
-                  console.warn("Nano merge failed, using raw accumulated tasks");
-                  finalTasks = nanoPendingTasks;
-                }
-
-                chrome.runtime.sendMessage({
-                  action: 'sync_nano_tasks',
-                  tasks: finalTasks
-                }).catch(()=>{});
-
-                nanoPendingTasks = [];
-                nanoChunkCount = 0;
-              } else {
-                showToast(`🤖 Nano extracted chunk ${nanoChunkCount}/5. Accumulating...`);
-              }
-              return; 
-          } catch(e) {
-            console.warn("Nano error in content script:", e);
-          }
-        }
-
+        // Send to background - the background will decide whether to use Nano or Flash-Lite
         chrome.runtime.sendMessage({
           action: 'process_chat',
           chatLog: finalBuffer
         }).catch(()=>{});
-      } catch (e) {}
+      } catch (e) {
+        console.error("SmartTODO sync error:", e);
+      }
     }
   } catch (e) {}
 }
