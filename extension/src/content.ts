@@ -91,7 +91,7 @@ function showToast(message: string, isError = false) {
 
 function isOnMonitoredSite(): boolean {
   const currentHost = window.location.hostname.toLowerCase();
-  if (currentHost.includes('messenger.com')) return true;
+  if (currentHost.includes('messenger.com') || currentHost.includes('instagram.com')) return true;
   return settings.sites.some(site => site && currentHost.includes(site.toLowerCase()));
 }
 
@@ -150,12 +150,50 @@ function checkAndAccumulateChat() {
 
   try {
     const currentHost = window.location.hostname.toLowerCase();
-    // 判斷是否為通訊軟體 (Messenger) 等網站
-    const isMessengerSite = currentHost.includes('messenger.com');
+    // 判斷是否為通訊軟體 (Messenger, Instagram) 等網站
+    const isMessengerSite = currentHost.includes('messenger.com') || currentHost.includes('instagram.com');
 
+    // 嘗試從畫面中擷取時間資訊，為了簡化並相容多數網站，我們在訊息元素的父層或附近尋找可能的時間字串
+    // 通常時間會藏在 aria-label, data-tooltip-content 或是鄰近的 span 裡面
     const messageElements = Array.from(document.querySelectorAll('div[dir="auto"]'));
     const chatTexts = messageElements
-      .map(el => el.textContent?.trim())
+      .map(el => {
+        const text = el.textContent?.trim();
+        if (!text) return null;
+
+        let timeStr = "";
+        
+        // 嘗試從祖父/曾祖父節點尋找是否有時間提示屬性 (Messenger 常見作法)
+        let parent = el.parentElement;
+        for (let i = 0; i < 4 && parent; i++) {
+           const tooltip = parent.getAttribute('data-tooltip-content');
+           if (tooltip && (tooltip.includes(':') || tooltip.includes('上午') || tooltip.includes('下午'))) {
+               timeStr = `[${tooltip}] `;
+               break;
+           }
+           parent = parent.parentElement;
+        }
+
+        // 如果找不到特定的 tooltip，嘗試在附近找可能包含時間的 span
+        if (!timeStr) {
+           const nearbySpans = el.closest('[role="row"]')?.querySelectorAll('span') || [];
+           for (const span of nearbySpans) {
+               const spanText = span.textContent?.trim();
+               if (spanText && (spanText.includes('上午') || spanText.includes('下午') || /\d{1,2}:\d{2}/.test(spanText))) {
+                   // 簡易判斷，避免把一般的訊息當作時間
+                   if (spanText.length < 20) {
+                       timeStr = `[${spanText}] `;
+                       break;
+                   }
+               }
+           }
+        }
+        
+        // 如果還是找不到，可以考慮加上當下時間當作備案 (或者不加)
+        // timeStr = timeStr || `[${new Date().toLocaleTimeString()}] `;
+
+        return timeStr + text;
+      })
       .filter(text => text && text.length > 0) as string[];
 
     let added = false;
