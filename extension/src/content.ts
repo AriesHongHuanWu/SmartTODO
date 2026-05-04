@@ -92,9 +92,58 @@ function isOnMonitoredSite(): boolean {
   return settings.sites.some(site => currentHost.includes(site));
 }
 
+function updateBufferUI() {
+  const containerId = 'smarttodo-buffer-ui';
+  let container = document.getElementById(containerId);
+  
+  if (!settings.autoSync || !isOnMonitoredSite() || messageBuffer.length === 0) {
+    if (container) container.style.display = 'none';
+    return;
+  }
+
+  if (!container) {
+    container = document.createElement('div');
+    container.id = containerId;
+    Object.assign(container.style, {
+      position: 'fixed',
+      bottom: '75px', // Above the toast
+      right: '20px',
+      padding: '6px 12px',
+      borderRadius: '20px',
+      backgroundColor: 'rgba(255, 255, 255, 0.7)',
+      backdropFilter: 'blur(8px)',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+      border: '1px solid rgba(255, 255, 255, 0.3)',
+      zIndex: '999998',
+      fontSize: '11px',
+      fontWeight: '600',
+      color: '#64748b',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      pointerEvents: 'none',
+      transition: 'all 0.3s ease'
+    });
+    document.body.appendChild(container);
+  }
+
+  const currentSize = messageBuffer.join(' ').length;
+  const percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
+  
+  container.style.display = 'flex';
+  container.innerHTML = `
+    <div style="width: 8px; height: 8px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'};"></div>
+    <span>Buffer: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
+  `;
+}
+
 function checkAndAccumulateChat() {
   // Only run if auto-sync is ON and we're on a monitored site
-  if (!settings.autoSync || !isOnMonitoredSite()) return;
+  if (!settings.autoSync || !isOnMonitoredSite()) {
+    updateBufferUI();
+    return;
+  }
 
   try {
     const messageElements = Array.from(document.querySelectorAll('div[dir="auto"]'));
@@ -103,15 +152,21 @@ function checkAndAccumulateChat() {
       .map(el => el.textContent?.trim())
       .filter(text => text && text.length > 0);
 
+    let added = false;
     for (const text of chatTexts) {
       if (text && !seenMessages.has(text)) {
         seenMessages.add(text);
         messageBuffer.push(text);
+        added = true;
       }
     }
 
     if (seenMessages.size > 1000) {
       seenMessages.clear();
+    }
+
+    if (added) {
+      updateBufferUI();
     }
 
     const currentBufferStr = messageBuffer.join(' ');
@@ -121,6 +176,7 @@ function checkAndAccumulateChat() {
         chatLog: [...messageBuffer]
       });
       messageBuffer = [];
+      updateBufferUI();
     }
   } catch (e) {
     console.error('SmartTODO: Error extracting chat', e);
