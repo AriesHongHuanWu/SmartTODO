@@ -26,12 +26,14 @@ export async function POST(request: Request) {
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
 
     const prompt = `Analyze the chat log below. 
-1. Identify new actionable tasks and output as JSON.
-2. Identify if any existing tasks have been completed based on context.
+1. Identify new actionable tasks for the user. For each task, provide a short 'title' and a 'context' sentence explaining who asked for it or why.
+2. Identify if any existing tasks have been completed based on context. Provide just the title of the completed task.
 
 Output strictly in JSON format:
 {
-  "newTasks": ["task 1", "task 2"],
+  "newTasks": [
+    { "title": "Buy milk", "context": "Alice asked you to buy milk on the way home" }
+  ],
   "completedTasks": ["task 3"]
 }
 

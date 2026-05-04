@@ -48,16 +48,23 @@ async function processChatLogs(chatLogs: string[]) {
   }
 }
 
-async function syncToFirestore(data: { newTasks: string[], completedTasks: string[] }) {
+async function syncToFirestore(data: { newTasks: { title: string, context: string }[], completedTasks: string[] }) {
   updateStatus("Syncing to database...", false, false);
   const userId = currentUser.uid;
 
   try {
     // 1. Add new tasks
-    for (const title of data.newTasks || []) {
+    for (const task of data.newTasks || []) {
+      // Support old string array or new object array
+      const title = typeof task === 'string' ? task : task.title;
+      const context = typeof task === 'string' ? '' : (task.context || '');
+      
+      if (!title) continue;
+
       await addDoc(collection(db, "todos"), {
         userId,
         title,
+        context,
         status: 'pending',
         source: 'messenger',
         createdAt: serverTimestamp(),
@@ -80,6 +87,7 @@ async function syncToFirestore(data: { newTasks: string[], completedTasks: strin
         if (isCompleted) {
           await updateDoc(docSnap.ref, {
             status: 'completed',
+            completedBy: 'ai',
             completedAt: serverTimestamp()
           });
         }
