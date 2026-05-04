@@ -7,9 +7,28 @@ auth.onAuthStateChanged((user) => {
   currentUser = user;
 });
 
+// Settings
+let settings = {
+  autoSync: false,
+  sites: ['www.messenger.com'],
+  bufferSize: 5000,
+  useCustomApi: false,
+  customApiUrl: '',
+  customApiKey: ''
+};
+
+chrome.storage.sync.get('smarttodo_settings', (result) => {
+  if (result.smarttodo_settings) {
+    settings = { ...settings, ...result.smarttodo_settings };
+  }
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'process_chat') {
     processChatLogs(request.chatLog);
+  }
+  if (request.action === 'settings_updated') {
+    settings = { ...settings, ...request.settings };
   }
 });
 
@@ -39,10 +58,20 @@ async function processChatLogs(chatLogs: string[]) {
       console.warn("SmartTODO: Could not fetch existing tasks for AI context", e);
     }
 
-    // Call the Next.js API route
-    const response = await fetch("https://smarttodo.pages.dev/api/analyze", {
+    // Determine API endpoint
+    const apiUrl = settings.useCustomApi && settings.customApiUrl 
+      ? settings.customApiUrl 
+      : "https://smarttodo.pages.dev/api/analyze";
+    
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (settings.useCustomApi && settings.customApiKey) {
+      headers["Authorization"] = `Bearer ${settings.customApiKey}`;
+    }
+
+    // Call the API
+    const response = await fetch(apiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         chatLogs,
         userId: currentUser.uid,

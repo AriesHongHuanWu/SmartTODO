@@ -4,92 +4,142 @@
   <meta charset="UTF-8">
   <title>SmartTODO</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      width: 300px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       padding: 16px;
-      margin: 0;
-      background-color: #f9fafb;
+      background: #f8fafc;
+      color: #1e293b;
     }
-    h2 {
-      margin-top: 0;
-      font-size: 18px;
-      color: #111827;
-    }
-    .hidden {
-      display: none !important;
-    }
-    .input-group {
-      margin-bottom: 12px;
-    }
-    .input-group label {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 14px;
-      color: #374151;
-    }
-    .input-group input {
-      width: 100%;
-      padding: 8px;
-      box-sizing: border-box;
-      border: 1px solid #d1d5db;
-      border-radius: 4px;
-    }
-    button {
-      width: 100%;
-      padding: 10px;
-      background-color: #3b82f6;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-    button:hover {
-      background-color: #2563eb;
-    }
-    button:disabled {
-      background-color: #93c5fd;
-      cursor: not-allowed;
-    }
-    #errorMsg {
-      color: #ef4444;
-      font-size: 14px;
-      margin-bottom: 12px;
-    }
-    #statusMsg {
-      color: #10b981;
-      font-size: 14px;
-      margin-top: 12px;
-      text-align: center;
-    }
-    .auth-section, .sync-section {
-      display: flex;
-      flex-direction: column;
-    }
+    h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+    .hidden { display: none !important; }
+
+    /* Toggle Switch */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 12px; }
+    .toggle-row .label { font-size: 14px; font-weight: 600; }
+    .toggle-row .desc { font-size: 11px; color: #94a3b8; }
+    .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #cbd5e1; border-radius: 24px; transition: .3s; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; }
+    input:checked + .slider { background: #3b82f6; }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    /* Sections */
+    .section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .section-title { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+
+    /* Inputs */
+    .input-group { margin-bottom: 8px; }
+    .input-group label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 500; }
+    .input-group input, .input-group select { width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; transition: border .2s; }
+    .input-group input:focus { border-color: #3b82f6; }
+
+    /* Buttons */
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all .2s; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-danger { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; margin-top: 8px; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-sm { padding: 6px 12px; width: auto; font-size: 12px; border-radius: 6px; }
+
+    /* Website list */
+    .site-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .site-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: #f1f5f9; border-radius: 8px; font-size: 12px; }
+    .site-item button { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; padding: 0 4px; width: auto; }
+    .add-site-row { display: flex; gap: 6px; }
+    .add-site-row input { flex: 1; }
+
+    /* Status */
+    #statusMsg { font-size: 12px; text-align: center; margin-top: 8px; padding: 6px; border-radius: 8px; }
+    #errorMsg { color: #ef4444; font-size: 12px; margin-bottom: 8px; padding: 8px; background: #fef2f2; border-radius: 8px; }
+
+    /* Range */
+    .range-row { display: flex; align-items: center; gap: 8px; }
+    .range-row input[type=range] { flex: 1; }
+    .range-val { font-size: 13px; font-weight: 600; color: #3b82f6; min-width: 45px; text-align: right; }
   </style>
 </head>
 <body>
-  <h2>SmartTODO Messenger</h2>
+  <h2>SmartTODO</h2>
+  <p class="subtitle">AI-powered task extraction</p>
   
   <div id="errorMsg" class="hidden"></div>
   
-  <div id="authSection" class="auth-section">
-    <div class="input-group">
-      <label>Email</label>
-      <input type="email" id="email" placeholder="you@example.com" />
+  <!-- Auth Section -->
+  <div id="authSection">
+    <div class="section">
+      <div class="input-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="you@example.com" />
+      </div>
+      <div class="input-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" />
+      </div>
+      <button class="btn btn-primary" id="loginBtn">Sign In</button>
     </div>
-    <div class="input-group">
-      <label>Password</label>
-      <input type="password" id="password" placeholder="••••••••" />
-    </div>
-    <button id="loginBtn">Login to Sync</button>
   </div>
 
-  <div id="syncSection" class="sync-section hidden">
-    <p style="font-size: 14px; color: #4b5563; margin-top: 0;">Logged in. Open Messenger to sync tasks.</p>
-    <button id="syncBtn">Sync Now</button>
-    <button id="logoutBtn" style="background-color: #ef4444; margin-top: 8px;">Logout</button>
+  <!-- Main Section (after login) -->
+  <div id="syncSection" class="hidden">
+    
+    <!-- Auto-Sync Toggle -->
+    <div class="toggle-row">
+      <div>
+        <div class="label">Auto-Sync</div>
+        <div class="desc">Extract tasks when buffer is full</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="autoSyncToggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Settings -->
+    <div class="section">
+      <div class="section-title">Monitored Websites</div>
+      <div class="site-list" id="siteList"></div>
+      <div class="add-site-row">
+        <input type="text" id="newSiteInput" placeholder="e.g. slack.com" />
+        <button class="btn btn-primary btn-sm" id="addSiteBtn">Add</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Buffer Size (characters)</div>
+      <div class="range-row">
+        <input type="range" id="bufferRange" min="5000" max="15000" step="1000" value="5000" />
+        <span class="range-val" id="bufferVal">5000</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">API Configuration</div>
+      <div class="input-group">
+        <label>
+          <input type="checkbox" id="useCustomApi" style="width:auto; margin-right:4px;" />
+          Use my own API
+        </label>
+      </div>
+      <div id="customApiFields" class="hidden">
+        <div class="input-group">
+          <label>API Endpoint</label>
+          <input type="text" id="customApiUrl" placeholder="https://your-server.com/api/analyze" />
+        </div>
+        <div class="input-group">
+          <label>API Key (sent as Bearer token)</label>
+          <input type="password" id="customApiKey" placeholder="sk-..." />
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="saveBtn">Save Settings</button>
+    <button class="btn btn-danger" id="logoutBtn">Sign Out</button>
+    
     <div id="statusMsg"></div>
   </div>
 

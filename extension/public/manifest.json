@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "SmartTODO Messenger Extractor",
-  "version": "1.0",
-  "description": "Extract tasks from Messenger and sync to SmartTODO",
+  "name": "SmartTODO",
+  "version": "2.0",
+  "description": "AI-powered task extraction from any website",
   "permissions": [
     "activeTab",
     "scripting",
     "storage"
   ],
   "host_permissions": [
-    "*://www.messenger.com/*"
+    "<all_urls>"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -21,7 +21,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://www.messenger.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["src/content.js"]
     }
   ]

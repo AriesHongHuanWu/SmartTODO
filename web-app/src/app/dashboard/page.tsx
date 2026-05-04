@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc, orderBy, addDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
@@ -71,14 +71,19 @@ export default function Dashboard() {
 
       const q = query(
         collection(db, "todos"),
-        where("userId", "==", user.uid),
-        orderBy("createdAt", "desc")
+        where("userId", "==", user.uid)
       );
 
       const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
         const fetchedTodos: Todo[] = [];
         snapshot.forEach((d) => {
           fetchedTodos.push({ id: d.id, ...d.data() } as Todo);
+        });
+        // Sort client-side: newest first
+        fetchedTodos.sort((a, b) => {
+          const ta = a.createdAt?.seconds || 0;
+          const tb = b.createdAt?.seconds || 0;
+          return tb - ta;
         });
         setTodos(fetchedTodos);
         setLoading(false);
@@ -160,7 +165,35 @@ export default function Dashboard() {
     ? todos 
     : todos.filter(t => (t.category || 'general') === activeFilter);
 
-  const pendingTodos = filteredTodos.filter(t => t.status === 'pending');
+  // Separate pending into dated and undated, sort dated by nearest first
+  const allPending = filteredTodos.filter(t => t.status === 'pending');
+  
+  const datedPending = allPending
+    .filter(t => t.dueDate)
+    .sort((a, b) => {
+      const da = a.dueDate?.toDate ? a.dueDate.toDate() : new Date(a.dueDate);
+      const db2 = b.dueDate?.toDate ? b.dueDate.toDate() : new Date(b.dueDate);
+      return da.getTime() - db2.getTime();
+    });
+  
+  const undatedPending = allPending.filter(t => !t.dueDate);
+  
+  // Group dated tasks by date string
+  const dateGroups: { label: string, dateKey: string, isOverdue: boolean, tasks: Todo[] }[] = [];
+  const now = new Date();
+  datedPending.forEach(t => {
+    const d = t.dueDate?.toDate ? t.dueDate.toDate() : new Date(t.dueDate);
+    const dateKey = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const isOverdue = d < now;
+    let group = dateGroups.find(g => g.dateKey === dateKey);
+    if (!group) {
+      group = { label: dateKey, dateKey, isOverdue, tasks: [] };
+      dateGroups.push(group);
+    }
+    group.tasks.push(t);
+  });
+
+  const pendingTodos = [...datedPending, ...undatedPending]; // for count
   const aiCompletedTodos = filteredTodos.filter(t => t.status === 'completed' && t.completedBy === 'ai');
   const userCompletedTodos = filteredTodos.filter(t => t.status === 'completed' && t.completedBy !== 'ai');
 
@@ -380,8 +413,38 @@ export default function Dashboard() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4">
-                {pendingTodos.map((todo) => <TaskCard key={todo.id} todo={todo} isCompleted={false} />)}
+              <div className="space-y-6">
+                {/* Dated tasks grouped by date */}
+                {dateGroups.map(group => (
+                  <div key={group.dateKey}>
+                    <div className={`flex items-center gap-3 mb-3 ${group.isOverdue ? 'text-red-600' : 'text-gray-500'}`}>
+                      <Calendar className="w-4 h-4" />
+                      <span className="text-sm font-semibold">
+                        {group.isOverdue ? '⚠️ Overdue — ' : ''}{group.label}
+                      </span>
+                      <div className="flex-1 h-px bg-gray-200"></div>
+                    </div>
+                    <div className="grid gap-3">
+                      {group.tasks.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} />)}
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Undated tasks */}
+                {undatedPending.length > 0 && (
+                  <div>
+                    {dateGroups.length > 0 && (
+                      <div className="flex items-center gap-3 mb-3 text-gray-400">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm font-semibold">No due date</span>
+                        <div className="flex-1 h-px bg-gray-200"></div>
+                      </div>
+                    )}
+                    <div className="grid gap-3">
+                      {undatedPending.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} />)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
