@@ -3,25 +3,31 @@ import { auth, db } from "./firebase";
 
 // Ensure auth is loaded
 let currentUser: any = null;
+let authInitialized = false;
+
 auth.onAuthStateChanged((user) => {
   currentUser = user;
+  authInitialized = true;
 });
 
-// Settings
-let settings = {
-  autoSync: false,
-  sites: ['www.messenger.com'],
-  bufferSize: 5000,
-  useCustomApi: false,
-  customApiUrl: '',
-  customApiKey: ''
-};
-
-chrome.storage.sync.get('smarttodo_settings', (result) => {
-  if (result.smarttodo_settings) {
-    settings = { ...settings, ...result.smarttodo_settings };
-  }
-});
+// Helper to wait for auth state
+async function waitForAuth() {
+  if (authInitialized) return currentUser;
+  
+  return new Promise((resolve) => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      currentUser = user;
+      authInitialized = true;
+      unsubscribe();
+      resolve(user);
+    });
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      unsubscribe();
+      resolve(currentUser);
+    }, 5000);
+  });
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'process_chat') {
@@ -33,7 +39,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function processChatLogs(chatLogs: string[]) {
-  if (!currentUser) {
+  // Wait for auth before checking
+  const user = await waitForAuth();
+  
+  if (!user) {
     updateStatus("Error: Not logged in", true, true);
     return;
   }
