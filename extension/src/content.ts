@@ -354,13 +354,26 @@ async function checkAndAccumulateChat() {
           try {
             const capabilities = await (window as any).ai.languageModel.capabilities();
             if (capabilities.available === 'no') {
-              showToast("❌ Local AI model not downloaded or unavailable.", true);
+              showToast("❌ Local AI model not supported on this device.", true);
               return;
             }
-              const session = await (window as any).ai.languageModel.create({
-                systemPrompt: `Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "extracted time if any"}]. If no tasks, output []. Do not add any conversational text.`
-              });
 
+            let session;
+            if (capabilities.available === 'after-download') {
+              showToast("⏳ Downloading Gemini Nano Model (2GB)... Please keep this tab open.", false, true);
+            }
+            
+            session = await (window as any).ai.languageModel.create({
+              systemPrompt: `Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "extracted time if any"}]. If no tasks, output []. Do not add any conversational text.`,
+              monitor(m: any) {
+                m.addEventListener('downloadprogress', (e: any) => {
+                  if (e.total > 0) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    showToast(`⏳ Downloading AI Model: ${pct}%...`);
+                  }
+                });
+              }
+            });
               const chatText = finalBuffer.map(b => b.text).join('\n');
               const res = await session.prompt(chatText);
               session.destroy();
