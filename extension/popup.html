@@ -4,143 +4,201 @@
   <meta charset="UTF-8">
   <title>SmartTODO</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 360px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding: 16px;
-      background: #f8fafc;
-      color: #1e293b;
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --bg: #f4f4f5;
+      --card-bg: #ffffff;
+      --text-main: #18181b;
+      --text-muted: #71717a;
+      --border: #e4e4e7;
     }
-    h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-    .subtitle { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    
+    body {
+      width: 380px;
+      background: var(--bg);
+      color: var(--text-main);
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--primary), #818cf8);
+      color: white;
+      padding: 20px 20px 30px;
+      border-bottom-left-radius: 20px;
+      border-bottom-right-radius: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      position: relative;
+    }
+    .header h2 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .header .subtitle { font-size: 13px; opacity: 0.9; }
+    
+    .container {
+      padding: 0 16px 16px;
+      margin-top: -15px;
+      position: relative;
+      z-index: 10;
+    }
+
     .hidden { display: none !important; }
 
-    /* Toggle Switch */
-    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 12px; }
-    .toggle-row .label { font-size: 14px; font-weight: 600; }
-    .toggle-row .desc { font-size: 11px; color: #94a3b8; }
-    .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #cbd5e1; border-radius: 24px; transition: .3s; }
-    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; }
-    input:checked + .slider { background: #3b82f6; }
-    input:checked + .slider:before { transform: translateX(20px); }
+    /* Card Panels */
+    .card { 
+      background: var(--card-bg); 
+      border-radius: 14px; 
+      padding: 16px; 
+      margin-bottom: 14px; 
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); 
+      border: 1px solid var(--border);
+    }
+    .card-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;}
 
-    /* Sections */
-    .section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
-    .section-title { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    /* Toggle Switch */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+    .toggle-row .text-block { flex: 1; }
+    .toggle-row .label { font-size: 15px; font-weight: 600; margin-bottom: 2px;}
+    .toggle-row .desc { font-size: 12px; color: var(--text-muted); }
+    
+    .switch { position: relative; width: 48px; height: 26px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #d4d4d8; border-radius: 26px; transition: .3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    input:checked + .slider { background: var(--primary); }
+    input:checked + .slider:before { transform: translateX(22px); }
 
     /* Inputs */
-    .input-group { margin-bottom: 8px; }
-    .input-group label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 500; }
-    .input-group input, .input-group select { width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; transition: border .2s; }
-    .input-group input:focus { border-color: #3b82f6; }
+    .input-group { margin-bottom: 12px; }
+    .input-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+    .input-group input, .input-group select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; outline: none; transition: all .2s; background: #fafafa; }
+    .input-group input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 14px !important; color: var(--text-main) !important; cursor: pointer; margin-bottom: 0 !important; }
+    .checkbox-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--primary); }
 
     /* Buttons */
-    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all .2s; }
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-danger { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; margin-top: 8px; }
-    .btn-danger:hover { background: #fee2e2; }
-    .btn:disabled { opacity: .5; cursor: not-allowed; }
-    .btn-sm { padding: 6px 12px; width: auto; font-size: 12px; border-radius: 6px; }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-danger { background: #fee2e2; color: var(--danger); border: 1px solid #fecaca; }
+    .btn-danger:hover { background: #fecaca; color: var(--danger-hover); }
+    .btn:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-sm { padding: 8px 14px; width: auto; font-size: 13px; border-radius: 8px; }
 
     /* Website list */
-    .site-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-    .site-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: #f1f5f9; border-radius: 8px; font-size: 12px; }
-    .site-item button { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; padding: 0 4px; width: auto; }
-    .add-site-row { display: flex; gap: 6px; }
-    .add-site-row input { flex: 1; }
+    .site-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; max-height: 120px; overflow-y: auto; padding-right: 4px; }
+    .site-list::-webkit-scrollbar { width: 4px; }
+    .site-list::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 4px; }
+    .site-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #f4f4f5; border-radius: 8px; font-size: 13px; border: 1px solid var(--border); font-family: monospace; }
+    .site-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; line-height: 1; transition: background .2s; }
+    .site-item button:hover { background: #fee2e2; }
+    .add-site-row { display: flex; gap: 8px; }
+    .add-site-row input { flex: 1; border-radius: 8px; padding: 8px 12px; }
 
-    /* Status */
-    #statusMsg { font-size: 12px; text-align: center; margin-top: 8px; padding: 6px; border-radius: 8px; }
-    #errorMsg { color: #ef4444; font-size: 12px; margin-bottom: 8px; padding: 8px; background: #fef2f2; border-radius: 8px; }
-
-    /* Range */
-    .range-row { display: flex; align-items: center; gap: 8px; }
-    .range-row input[type=range] { flex: 1; }
-    .range-val { font-size: 13px; font-weight: 600; color: #3b82f6; min-width: 45px; text-align: right; }
+    /* Status & Range */
+    #statusMsg { font-size: 13px; text-align: center; margin-top: 12px; padding: 8px; border-radius: 8px; font-weight: 500; transition: opacity .3s; }
+    #errorMsg { color: var(--danger); font-size: 13px; margin: 0 16px 12px; padding: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; display: flex; align-items: center; gap: 6px; }
+    
+    .range-row { display: flex; align-items: center; gap: 12px; }
+    .range-row input[type=range] { flex: 1; accent-color: var(--primary); height: 6px; background: var(--border); border-radius: 3px; outline: none; }
+    .range-val { font-size: 14px; font-weight: 700; color: var(--primary); min-width: 50px; text-align: right; background: #eef2ff; padding: 4px 8px; border-radius: 6px; }
+    
+    /* Footer */
+    .footer { text-align: center; margin-top: 16px; margin-bottom: 8px;}
   </style>
 </head>
 <body>
-  <h2>SmartTODO</h2>
-  <p class="subtitle">AI-powered task extraction</p>
   
-  <div id="errorMsg" class="hidden"></div>
-  
-  <!-- Auth Section -->
-  <div id="authSection">
-    <div class="section">
-      <div class="input-group">
-        <label>Email</label>
-        <input type="email" id="email" placeholder="you@example.com" />
-      </div>
-      <div class="input-group">
-        <label>Password</label>
-        <input type="password" id="password" placeholder="••••••••" />
-      </div>
-      <button class="btn btn-primary" id="loginBtn">Sign In</button>
-    </div>
+  <div class="header">
+    <h2>✨ SmartTODO</h2>
+    <p class="subtitle">AI-powered smart task extractor</p>
   </div>
 
-  <!-- Main Section (after login) -->
-  <div id="syncSection" class="hidden">
-    
-    <!-- Auto-Sync Toggle -->
-    <div class="toggle-row">
-      <div>
-        <div class="label">Auto-Sync</div>
-        <div class="desc">Extract tasks when buffer is full</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="autoSyncToggle" />
-        <span class="slider"></span>
-      </label>
-    </div>
-
-    <!-- Settings -->
-    <div class="section">
-      <div class="section-title">Monitored Websites</div>
-      <div class="site-list" id="siteList"></div>
-      <div class="add-site-row">
-        <input type="text" id="newSiteInput" placeholder="e.g. slack.com" />
-        <button class="btn btn-primary btn-sm" id="addSiteBtn">Add</button>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Buffer Size (characters)</div>
-      <div class="range-row">
-        <input type="range" id="bufferRange" min="1000" max="10000" step="500" value="3000" />
-        <span class="range-val" id="bufferVal">3000</span>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">API Configuration</div>
-      <div class="input-group">
-        <label>
-          <input type="checkbox" id="useCustomApi" style="width:auto; margin-right:4px;" />
-          Use my own API
-        </label>
-      </div>
-      <div id="customApiFields" class="hidden">
+  <div id="errorMsg" class="hidden"></div>
+  
+  <div class="container">
+    <!-- Auth Section -->
+    <div id="authSection">
+      <div class="card">
         <div class="input-group">
-          <label>API Endpoint</label>
-          <input type="text" id="customApiUrl" placeholder="https://your-server.com/api/analyze" />
+          <label>Email Address</label>
+          <input type="email" id="email" placeholder="you@example.com" />
         </div>
         <div class="input-group">
-          <label>API Key (sent as Bearer token)</label>
-          <input type="password" id="customApiKey" placeholder="sk-..." />
+          <label>Password</label>
+          <input type="password" id="password" placeholder="••••••••" />
         </div>
+        <button class="btn btn-primary" id="loginBtn" style="margin-top: 16px;">
+          Sign In
+        </button>
       </div>
     </div>
 
-    <button class="btn btn-primary" id="saveBtn">Save Settings</button>
-    <button class="btn btn-danger" id="logoutBtn">Sign Out</button>
-    
-    <div id="statusMsg"></div>
+    <!-- Main Section (after login) -->
+    <div id="syncSection" class="hidden">
+      
+      <!-- Auto-Sync Toggle -->
+      <div class="card" style="padding: 18px 16px;">
+        <div class="toggle-row">
+          <div class="text-block">
+            <div class="label">Auto-Sync</div>
+            <div class="desc">Automatically detect & extract tasks</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoSyncToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <div class="card-title">🌐 Monitored Websites</div>
+        <div class="site-list" id="siteList"></div>
+        <div class="add-site-row">
+          <input type="text" id="newSiteInput" placeholder="e.g. line.me, linkedin.com" />
+          <button class="btn btn-primary btn-sm" id="addSiteBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📏 Buffer Size (Chars)</div>
+        <div class="range-row">
+          <input type="range" id="bufferRange" min="500" max="10000" step="500" value="3000" />
+          <span class="range-val" id="bufferVal">3000</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚙️ API Configuration</div>
+        <div class="input-group" style="margin-bottom: 12px;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="useCustomApi" />
+            Use Custom API Endpoint
+          </label>
+        </div>
+        <div id="customApiFields" class="hidden" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+          <div class="input-group">
+            <label>API Endpoint</label>
+            <input type="text" id="customApiUrl" placeholder="https://your-server.com/api/analyze" />
+          </div>
+          <div class="input-group" style="margin-bottom:0;">
+            <label>API Key (Bearer Token)</label>
+            <input type="password" id="customApiKey" placeholder="sk-..." />
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="saveBtn" style="margin-bottom: 12px;">Save Preferences</button>
+      <button class="btn btn-danger" id="logoutBtn">Sign Out</button>
+      
+      <div id="statusMsg"></div>
+    </div>
   </div>
 
   <script type="module" src="/src/popup.ts"></script>
