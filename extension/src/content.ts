@@ -1,27 +1,44 @@
-let lastChatHash = '';
+let seenMessages = new Set<string>();
+let messageBuffer: string[] = [];
 
-function extractAndSendChat(isManual = false) {
+function checkAndAccumulateChat() {
   try {
     const messageElements = Array.from(document.querySelectorAll('div[dir="auto"]'));
     
-    // Filter out elements that don't look like chat messages and take the last 30
+    // Filter out elements that don't look like chat messages
     const chatTexts = messageElements
       .map(el => el.textContent?.trim())
-      .filter(text => text && text.length > 0)
-      .slice(-30);
+      .filter(text => text && text.length > 0);
 
-    const currentHash = chatTexts.join('|');
-    
-    // Only send if it's a manual trigger OR if the chat has actually changed
-    if (isManual || (chatTexts.length > 0 && currentHash !== lastChatHash)) {
-      lastChatHash = currentHash;
+    let newMessagesFound = false;
+
+    // Add only new messages to buffer
+    for (const text of chatTexts) {
+      if (text && !seenMessages.has(text)) {
+        seenMessages.add(text);
+        messageBuffer.push(text);
+        newMessagesFound = true;
+      }
+    }
+
+    // Keep memory usage in check by limiting the Set size
+    if (seenMessages.size > 1000) {
+      seenMessages.clear();
+    }
+
+    // Check if buffer exceeds 200 characters
+    const currentBufferStr = messageBuffer.join(' ');
+    if (currentBufferStr.length >= 200) {
       chrome.runtime.sendMessage({
         action: 'process_chat',
-        chatLog: chatTexts
+        chatLog: [...messageBuffer]
       });
+      // Clear buffer after sending
+      messageBuffer = [];
       return true;
     }
-    return false;
+
+    return newMessagesFound;
   } catch (e) {
     console.error('SmartTODO: Error extracting chat', e);
     return false;
@@ -30,10 +47,19 @@ function extractAndSendChat(isManual = false) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'extract_chat') {
-    const sent = extractAndSendChat(true);
-    sendResponse({ status: sent ? "Extracting..." : "No new messages" });
+    // If manually triggered, send whatever is in the buffer immediately
+    if (messageBuffer.length > 0) {
+      chrome.runtime.sendMessage({
+        action: 'process_chat',
+        chatLog: [...messageBuffer]
+      });
+      messageBuffer = [];
+      sendResponse({ status: "Extracting buffered messages..." });
+    } else {
+      sendResponse({ status: "No new messages to sync" });
+    }
   }
 });
 
-// Auto-sync every 30 seconds
-setInterval(() => extractAndSendChat(false), 30000);
+// Scan DOM every 5 seconds for new messages
+setInterval(checkAndAccumulateChat, 5000);
