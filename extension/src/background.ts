@@ -133,30 +133,43 @@ async function processChatLogs(chatLogObjects: {text: string, url: string, site:
       console.warn("Failed to fetch existing tasks for context", dbError);
     }
 
+    let finalChatLogs = chatLogObjects;
+
     if (settings.useLocalAi && typeof (self as any).ai !== 'undefined' && (self as any).ai.languageModel) {
-      updateStatus("Analyzing chat securely locally (Gemini Nano)...", false, false);
+      updateStatus("🤖 Nano is filtering messages locally...", false, false);
       const capabilities = await (self as any).ai.languageModel.capabilities();
       if (capabilities.available !== 'no') {
         const session = await (self as any).ai.languageModel.create({
-          systemPrompt: `You are a task extraction AI. Identify NEW actionable tasks from the chat logs.
-RULES:
-1. Return output in STRICT JSON format matching this schema: { "tasks": [ { "action": "create", "title": "Task title", "context": "Reason", "category": "work", "dueDate": null, "threadUrl": "url", "siteName": "site" } ] }
-2. Categories: 'work', 'personal', 'shopping', 'meeting', 'homework', 'general'.
-3. Do not invent tasks if it is just a casual chat. Return {"tasks": []}.`
+          systemPrompt: `You are a strict binary classifier. Determine if the message contains an actionable task, a todo, a meeting arrangement, a promise to do something, or a schedule. Reply ONLY with "YES" or "NO".`
         });
 
-        const promptText = `Existing Pending Tasks:\n${JSON.stringify(existingTasks)}\n\nChat Logs:\n${JSON.stringify(chatLogObjects)}`;
-        const localResponse = await session.prompt(promptText);
-        
-        let cleanText = localResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsedData = JSON.parse(cleanText);
-        await syncToFirestore(parsedData);
+        const filteredLogs = [];
+        for (const log of chatLogObjects) {
+          try {
+            const res = await session.prompt(log.text);
+            if (res.toUpperCase().includes('YES')) {
+              filteredLogs.push(log);
+            }
+          } catch(e) {
+            // If Nano fails on a specific message, include it to be safe
+            filteredLogs.push(log);
+          }
+        }
         session.destroy();
-        return;
+        
+        if (filteredLogs.length === 0) {
+          updateStatus("✨ Nano filtered casual chat. No tasks found.", false, true);
+          return;
+        }
+        
+        finalChatLogs = filteredLogs;
+        updateStatus(`☁️ Nano found ${filteredLogs.length} potential tasks. Sending to Flash-Lite...`, false, false);
       } else {
         console.warn("Local AI is disabled or requires Chrome flags to be enabled.");
-        updateStatus("Local AI not ready. Falling back to Cloud API...", false, false);
+        updateStatus("☁️ Local AI not ready. Flash-Lite is analyzing...", false, false);
       }
+    } else {
+      updateStatus("☁️ Flash-Lite is analyzing...", false, false);
     }
 
     const apiUrl = settings.useCustomApi && settings.customApiUrl 
@@ -173,7 +186,7 @@ RULES:
       method: "POST",
       headers,
       body: JSON.stringify({
-        chatLogs: chatLogObjects,
+        chatLogs: finalChatLogs,
         userId: currentUser.uid,
         existingTasks
       })
