@@ -10,6 +10,23 @@ auth.onAuthStateChanged((user) => {
   authInitialized = true;
 });
 
+// Settings
+let settings = {
+  autoSync: false,
+  sites: ['www.messenger.com'],
+  bufferSize: 3000,
+  useCustomApi: false,
+  customApiUrl: '',
+  customApiKey: ''
+};
+
+// Initial load
+chrome.storage.sync.get('smarttodo_settings', (result) => {
+  if (result.smarttodo_settings) {
+    settings = { ...settings, ...result.smarttodo_settings };
+  }
+});
+
 // Helper to wait for auth state
 async function waitForAuth() {
   if (authInitialized) return currentUser;
