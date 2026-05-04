@@ -41,15 +41,8 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
 
-    // Build existing tasks context for the AI
-    let existingTasksBlock = '';
+    let existingTasksText = '';
     if (existingTasks && Array.isArray(existingTasks) && existingTasks.length > 0) {
-      existingTasksBlock = `
-The user currently has these pending tasks:
-${existingTasks.map((t: any, i: number) => `${i + 1}. "${t.title}" (category: ${t.category || 'general'}${t.dueDate ? ', due: ' + t.dueDate : ''})`).join('\n')}
-
-If you detect that any of these tasks have been COMPLETED based on the chat, include them in "completedTasks".
-If you detect that any of these tasks have CHANGED (e.g. rescheduled, details modified), include them in "updatedTasks" with the original title and the new fields.
       existingTasksText = JSON.stringify(existingTasks, null, 2);
     }
 
@@ -88,17 +81,16 @@ ${JSON.stringify(chatLogs, null, 2)}
 `;
 
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text();
+    const responseText = result.response.text();
     
     // Clean up markdown if any
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    let parsedData = { newTasks: [], completedTasks: [], updatedTasks: [] };
+    let parsedData = { tasks: [] };
     try {
-      parsedData = JSON.parse(text);
+      parsedData = JSON.parse(cleanText);
     } catch (e) {
-      console.warn("AI returned non-JSON or empty response", text);
+      console.warn("AI returned non-JSON or empty response", cleanText);
     }
 
     return NextResponse.json(parsedData, { headers: corsHeaders });
