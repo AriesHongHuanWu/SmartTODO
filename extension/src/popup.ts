@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const messageVal = document.getElementById('messageVal')!;
 
   const useLocalAi = document.getElementById('useLocalAi') as HTMLInputElement;
+  const nanoInstructions = document.getElementById('nanoInstructions')!;
   const useCustomApi = document.getElementById('useCustomApi') as HTMLInputElement;
   const customApiFields = document.getElementById('customApiFields')!;
   const customApiUrl = document.getElementById('customApiUrl') as HTMLInputElement;
@@ -79,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageVal.textContent = String(currentSettings.messageThreshold || 10);
 
     useLocalAi.checked = currentSettings.useLocalAi;
+    nanoInstructions.classList.toggle('hidden', !currentSettings.useLocalAi);
     useCustomApi.checked = currentSettings.useCustomApi;
     customApiFields.classList.toggle('hidden', !currentSettings.useCustomApi);
     customApiUrl.value = currentSettings.customApiUrl;
@@ -176,6 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
     messageVal.textContent = messageRange.value;
   });
   messageRange.addEventListener('change', saveSettings);
+
+  useLocalAi.addEventListener('change', () => {
+    nanoInstructions.classList.toggle('hidden', !useLocalAi.checked);
+  });
 
   useCustomApi.addEventListener('change', () => {
     customApiFields.classList.toggle('hidden', !useCustomApi.checked);
