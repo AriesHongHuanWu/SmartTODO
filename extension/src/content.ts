@@ -14,12 +14,14 @@ chrome.storage.sync.get('smarttodo_settings', (result) => {
   if (result.smarttodo_settings) {
     settings = { ...settings, ...result.smarttodo_settings };
   }
+  updateBufferUI();
 });
 
 // Listen for settings updates and toast requests
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'settings_updated') {
     settings = { ...settings, ...request.settings };
+    updateBufferUI();
   }
   if (request.action === 'show_toast') {
     showToast(request.message, request.isError);
@@ -31,6 +33,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         chatLog: [...messageBuffer]
       });
       messageBuffer = [];
+      updateBufferUI();
       sendResponse({ status: "Extracting buffered messages..." });
     } else {
       sendResponse({ status: "No new messages to sync" });
@@ -55,7 +58,7 @@ function showToast(message: string, isError = false) {
       backdropFilter: 'blur(10px)',
       boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
       border: '1px solid rgba(255, 255, 255, 0.3)',
-      zIndex: '999999',
+      zIndex: '2147483647',
       transition: 'all 0.3s ease',
       opacity: '0',
       transform: 'translateY(20px)',
@@ -71,16 +74,13 @@ function showToast(message: string, isError = false) {
 
   const icon = isError ? '❌' : '✨';
   const color = isError ? '#ef4444' : '#3b82f6';
-  
   toast.innerHTML = `<span style="font-size: 18px;">${icon}</span> <span style="color: ${color}">${message}</span>`;
   
-  // Show
   requestAnimationFrame(() => {
     toast!.style.opacity = '1';
     toast!.style.transform = 'translateY(0)';
   });
 
-  // Hide after 3 seconds
   setTimeout(() => {
     toast!.style.opacity = '0';
     toast!.style.transform = 'translateY(20px)';
@@ -88,15 +88,16 @@ function showToast(message: string, isError = false) {
 }
 
 function isOnMonitoredSite(): boolean {
-  const currentHost = window.location.hostname;
-  return settings.sites.some(site => currentHost.includes(site));
+  const currentHost = window.location.hostname.toLowerCase();
+  if (currentHost.includes('messenger.com')) return true;
+  return settings.sites.some(site => site && currentHost.includes(site.toLowerCase()));
 }
 
 function updateBufferUI() {
   const containerId = 'smarttodo-buffer-ui';
   let container = document.getElementById(containerId);
   
-  if (!settings.autoSync || !isOnMonitoredSite() || messageBuffer.length === 0) {
+  if (!settings.autoSync || !isOnMonitoredSite()) {
     if (container) container.style.display = 'none';
     return;
   }
@@ -106,24 +107,24 @@ function updateBufferUI() {
     container.id = containerId;
     Object.assign(container.style, {
       position: 'fixed',
-      bottom: '75px', // Above the toast
+      bottom: '75px',
       right: '20px',
-      padding: '6px 12px',
+      padding: '8px 14px',
       borderRadius: '20px',
-      backgroundColor: 'rgba(255, 255, 255, 0.7)',
-      backdropFilter: 'blur(8px)',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-      border: '1px solid rgba(255, 255, 255, 0.3)',
-      zIndex: '999998',
-      fontSize: '11px',
-      fontWeight: '600',
-      color: '#64748b',
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      backdropFilter: 'blur(12px)',
+      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+      border: '1px solid rgba(255, 255, 255, 0.5)',
+      zIndex: '2147483647',
+      fontSize: '12px',
+      fontWeight: '700',
+      color: '#475569',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       display: 'flex',
       alignItems: 'center',
-      gap: '6px',
+      gap: '8px',
       pointerEvents: 'none',
-      transition: 'all 0.3s ease'
+      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
     });
     document.body.appendChild(container);
   }
@@ -133,19 +134,13 @@ function updateBufferUI() {
   
   container.style.display = 'flex';
   container.innerHTML = `
-    <div style="width: 8px; height: 8px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'};"></div>
-    <span>Buffer: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
+    <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : '#93c5fd'};"></div>
+    <span style="letter-spacing: -0.2px;">SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
   `;
 }
 
 function checkAndAccumulateChat() {
-  // Check if extension context is still valid
-  if (!chrome.runtime?.id) {
-    console.log("SmartTODO: Extension context invalidated. Please refresh the page.");
-    return;
-  }
-
-  // Only run if auto-sync is ON and we're on a monitored site
+  if (!chrome.runtime?.id) return;
   if (!settings.autoSync || !isOnMonitoredSite()) {
     updateBufferUI();
     return;
@@ -153,7 +148,6 @@ function checkAndAccumulateChat() {
 
   try {
     const messageElements = Array.from(document.querySelectorAll('div[dir="auto"]'));
-    
     const chatTexts = messageElements
       .map(el => el.textContent?.trim())
       .filter(text => text && text.length > 0);
@@ -167,16 +161,10 @@ function checkAndAccumulateChat() {
       }
     }
 
-    if (seenMessages.size > 1000) {
-      seenMessages.clear();
-    }
+    if (seenMessages.size > 1000) seenMessages.clear();
+    if (added) updateBufferUI();
 
-    if (added) {
-      updateBufferUI();
-    }
-
-    const currentBufferStr = messageBuffer.join(' ');
-    if (currentBufferStr.length >= settings.bufferSize) {
+    if (messageBuffer.join(' ').length >= settings.bufferSize) {
       try {
         chrome.runtime.sendMessage({
           action: 'process_chat',
@@ -184,17 +172,10 @@ function checkAndAccumulateChat() {
         });
         messageBuffer = [];
         updateBufferUI();
-      } catch (e) {
-        console.warn("SmartTODO: Failed to send message (context likely invalidated)", e);
-      }
+      } catch (e) {}
     }
-  } catch (e) {
-    // Only log if it's not a context error
-    if (e instanceof Error && !e.message.includes("context invalidated")) {
-      console.error('SmartTODO: Error extracting chat', e);
-    }
-  }
+  } catch (e) {}
 }
 
-// Scan DOM every 5 seconds
 setInterval(checkAndAccumulateChat, 5000);
+updateBufferUI();
