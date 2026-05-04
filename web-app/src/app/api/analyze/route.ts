@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { chatLogs, userId } = body;
+    const { chatLogs, userId, existingTasks } = body;
 
     if (!chatLogs || !Array.isArray(chatLogs)) {
       return NextResponse.json({ error: 'Invalid chat logs provided.' }, { status: 400, headers: corsHeaders });
@@ -41,17 +41,36 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
 
-    const prompt = `Analyze the chat log below. 
-1. Identify new actionable tasks for the user. For each task, provide a short 'title' and a 'context' sentence explaining who asked for it or why.
-2. Identify if any existing tasks have been completed based on context. Provide just the title of the completed task.
-3. If the conversation is just casual chat and does not contain any actionable To-Do tasks, simply return empty arrays []. Do NOT invent tasks.
+    // Build existing tasks context for the AI
+    let existingTasksBlock = '';
+    if (existingTasks && Array.isArray(existingTasks) && existingTasks.length > 0) {
+      existingTasksBlock = `
+The user currently has these pending tasks:
+${existingTasks.map((t: any, i: number) => `${i + 1}. "${t.title}" (category: ${t.category || 'general'}${t.dueDate ? ', due: ' + t.dueDate : ''})`).join('\n')}
 
+If you detect that any of these tasks have been COMPLETED based on the chat, include them in "completedTasks".
+If you detect that any of these tasks have CHANGED (e.g. rescheduled, details modified), include them in "updatedTasks" with the original title and the new fields.
+`;
+    }
+
+    const prompt = `You are a task extraction AI. Analyze the chat log below.
+
+RULES:
+1. Identify NEW actionable tasks. For each, provide: title, context, category, and dueDate.
+2. Categories MUST be one of: general, meeting, homework, shopping, work, personal
+3. If you can detect a deadline from the conversation (e.g. "by Friday", "before 3pm tomorrow"), set dueDate as an ISO 8601 string. Otherwise set it to null.
+4. If the conversation is just casual chat with NO actionable tasks, return empty arrays. Do NOT invent tasks.
+5. Detect if existing tasks have been completed or updated/rescheduled.
+${existingTasksBlock}
 Output strictly in JSON format:
 {
   "newTasks": [
-    { "title": "Buy milk", "context": "Alice asked you to buy milk on the way home" }
+    { "title": "Buy milk", "context": "Alice asked you to buy milk on the way home", "category": "shopping", "dueDate": null }
   ],
-  "completedTasks": ["task 3"]
+  "completedTasks": ["Buy milk"],
+  "updatedTasks": [
+    { "originalTitle": "Team meeting at 2pm", "title": "Team meeting at 3pm", "context": "Bob rescheduled the meeting to 3pm", "category": "meeting", "dueDate": "2026-05-05T15:00:00Z" }
+  ]
 }
 
 Chat Log:
@@ -65,7 +84,7 @@ ${chatLogs.join('\n')}
     // Clean up markdown if any
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    let parsedData = { newTasks: [], completedTasks: [] };
+    let parsedData = { newTasks: [], completedTasks: [], updatedTasks: [] };
     try {
       parsedData = JSON.parse(text);
     } catch (e) {
@@ -78,4 +97,3 @@ ${chatLogs.join('\n')}
     return NextResponse.json({ error: error.message || 'Failed to analyze chat' }, { status: 500, headers: corsHeaders });
   }
 }
-
