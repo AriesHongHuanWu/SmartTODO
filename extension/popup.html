@@ -167,10 +167,30 @@
       </div>
 
       <div class="card">
-        <div class="card-title">📏 Buffer Size (Chars)</div>
-        <div class="range-row">
-          <input type="range" id="bufferRange" min="500" max="10000" step="500" value="3000" />
-          <span class="range-val" id="bufferVal">3000</span>
+        <div class="card-title">📏 Trigger Sync By</div>
+        <div class="input-group" style="display: flex; gap: 12px; margin-top: 4px; margin-bottom: 8px;">
+          <label class="checkbox-label" style="cursor: pointer;">
+            <input type="radio" name="syncMode" value="buffer" id="modeBuffer" />
+            Characters (Buffer)
+          </label>
+          <label class="checkbox-label" style="cursor: pointer;">
+            <input type="radio" name="syncMode" value="message" id="modeMessage" />
+            Messages
+          </label>
+        </div>
+
+        <div id="bufferSettings">
+          <div class="range-row">
+            <input type="range" id="bufferRange" min="500" max="10000" step="500" value="3000" />
+            <span class="range-val" id="bufferVal">3000</span>
+          </div>
+        </div>
+
+        <div id="messageSettings" class="hidden">
+          <div class="range-row">
+            <input type="range" id="messageRange" min="1" max="50" step="1" value="10" />
+            <span class="range-val" id="messageVal">10</span>
+          </div>
         </div>
       </div>
 

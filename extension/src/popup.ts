@@ -19,6 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const addSiteBtn = document.getElementById('addSiteBtn') as HTMLButtonElement;
   const bufferRange = document.getElementById('bufferRange') as HTMLInputElement;
   const bufferVal = document.getElementById('bufferVal')!;
+  const modeBuffer = document.getElementById('modeBuffer') as HTMLInputElement;
+  const modeMessage = document.getElementById('modeMessage') as HTMLInputElement;
+  const bufferSettings = document.getElementById('bufferSettings')!;
+  const messageSettings = document.getElementById('messageSettings')!;
+  const messageRange = document.getElementById('messageRange') as HTMLInputElement;
+  const messageVal = document.getElementById('messageVal')!;
+
   const useCustomApi = document.getElementById('useCustomApi') as HTMLInputElement;
   const customApiFields = document.getElementById('customApiFields')!;
   const customApiUrl = document.getElementById('customApiUrl') as HTMLInputElement;
@@ -27,7 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Default settings
   const DEFAULT_SETTINGS = {
     autoSync: false,
-    sites: ['www.messenger.com'],
+    syncMode: 'buffer', // 'buffer' or 'message'
+    messageThreshold: 10,
+    sites: ['www.messenger.com', 'instagram.com'],
     bufferSize: 3000,
     useCustomApi: false,
     customApiUrl: '',
@@ -50,8 +59,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderSettings() {
     autoSyncToggle.checked = currentSettings.autoSync;
+    
+    // Sync mode toggles
+    if (currentSettings.syncMode === 'message') {
+      modeMessage.checked = true;
+      bufferSettings.classList.add('hidden');
+      messageSettings.classList.remove('hidden');
+    } else {
+      modeBuffer.checked = true;
+      bufferSettings.classList.remove('hidden');
+      messageSettings.classList.add('hidden');
+    }
+
     bufferRange.value = String(currentSettings.bufferSize);
     bufferVal.textContent = String(currentSettings.bufferSize);
+    messageRange.value = String(currentSettings.messageThreshold || 10);
+    messageVal.textContent = String(currentSettings.messageThreshold || 10);
+
     useCustomApi.checked = currentSettings.useCustomApi;
     customApiFields.classList.toggle('hidden', !currentSettings.useCustomApi);
     customApiUrl.value = currentSettings.customApiUrl;
@@ -80,7 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function saveSettings() {
     currentSettings.autoSync = autoSyncToggle.checked;
+    currentSettings.syncMode = modeMessage.checked ? 'message' : 'buffer';
     currentSettings.bufferSize = parseInt(bufferRange.value);
+    currentSettings.messageThreshold = parseInt(messageRange.value);
     currentSettings.useCustomApi = useCustomApi.checked;
     currentSettings.customApiUrl = customApiUrl.value.trim();
     currentSettings.customApiKey = customApiKey.value.trim();
@@ -125,9 +151,27 @@ document.addEventListener('DOMContentLoaded', () => {
   logoutBtn.addEventListener('click', () => signOut(auth));
 
   // Settings handlers
+  modeBuffer.addEventListener('change', () => {
+    bufferSettings.classList.remove('hidden');
+    messageSettings.classList.add('hidden');
+    saveSettings();
+  });
+
+  modeMessage.addEventListener('change', () => {
+    bufferSettings.classList.add('hidden');
+    messageSettings.classList.remove('hidden');
+    saveSettings();
+  });
+
   bufferRange.addEventListener('input', () => {
     bufferVal.textContent = bufferRange.value;
   });
+  bufferRange.addEventListener('change', saveSettings);
+
+  messageRange.addEventListener('input', () => {
+    messageVal.textContent = messageRange.value;
+  });
+  messageRange.addEventListener('change', saveSettings);
 
   useCustomApi.addEventListener('change', () => {
     customApiFields.classList.toggle('hidden', !useCustomApi.checked);

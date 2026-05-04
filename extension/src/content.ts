@@ -4,7 +4,9 @@ let lastMessageText: string | null = null; // 用於 Incremental Mode 紀錄上�
 
 let settings = {
   autoSync: false,
-  sites: ['www.messenger.com'],
+  syncMode: 'buffer',
+  messageThreshold: 10,
+  sites: ['www.messenger.com', 'instagram.com'],
   bufferSize: 3000,
   useCustomApi: false,
   customApiUrl: '',
@@ -131,13 +133,24 @@ function updateBufferUI() {
     document.body.appendChild(container);
   }
 
-  const currentSize = messageBuffer.join(' ').length;
-  const percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
+  const isMessageMode = settings.syncMode === 'message';
+  let percent = 0;
+  let text = '';
+
+  if (isMessageMode) {
+    const currentCount = messageBuffer.length;
+    percent = Math.min(100, (currentCount / (settings.messageThreshold || 10)) * 100);
+    text = `SmartTODO: ${currentCount} / ${settings.messageThreshold || 10} msgs`;
+  } else {
+    const currentSize = messageBuffer.join(' ').length;
+    percent = Math.min(100, (currentSize / settings.bufferSize) * 100);
+    text = `SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()} chars`;
+  }
   
   container.style.display = 'flex';
   container.innerHTML = `
     <div style="width: 10px; height: 10px; border-radius: 50%; background: ${percent > 90 ? '#ef4444' : '#3b82f6'}; box-shadow: 0 0 8px ${percent > 90 ? '#fca5a5' : '#93c5fd'};"></div>
-    <span style="letter-spacing: -0.2px;">SmartTODO: ${currentSize.toLocaleString()} / ${settings.bufferSize.toLocaleString()}</span>
+    <span style="letter-spacing: -0.2px;">${text}</span>
   `;
 }
 
@@ -244,7 +257,12 @@ function checkAndAccumulateChat() {
     if (seenMessages.size > 1000) seenMessages.clear();
     if (added) updateBufferUI();
 
-    if (messageBuffer.join(' ').length >= settings.bufferSize) {
+    const isMessageMode = settings.syncMode === 'message';
+    const shouldSync = isMessageMode 
+      ? messageBuffer.length >= (settings.messageThreshold || 10)
+      : messageBuffer.join(' ').length >= settings.bufferSize;
+
+    if (shouldSync) {
       try {
         // 當緩衝區滿了，才送出做 AI 分析
         chrome.runtime.sendMessage({
