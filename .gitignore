@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+extension/dist/
+web-app/.next/
+web-app/out/
+web-app/public/extension.zip
+node_modules

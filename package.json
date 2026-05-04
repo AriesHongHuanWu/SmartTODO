@@ -1,0 +1,13 @@
+{
+  "name": "smarttodo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "zip-extension": "node scripts/zip-extension.js",
+    "install-all": "npm install && cd extension && npm install && cd ../web-app && npm install"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1"
+  }
+}
