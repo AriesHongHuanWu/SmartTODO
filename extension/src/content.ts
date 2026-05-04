@@ -139,6 +139,12 @@ function updateBufferUI() {
 }
 
 function checkAndAccumulateChat() {
+  // Check if extension context is still valid
+  if (!chrome.runtime?.id) {
+    console.log("SmartTODO: Extension context invalidated. Please refresh the page.");
+    return;
+  }
+
   // Only run if auto-sync is ON and we're on a monitored site
   if (!settings.autoSync || !isOnMonitoredSite()) {
     updateBufferUI();
@@ -171,15 +177,22 @@ function checkAndAccumulateChat() {
 
     const currentBufferStr = messageBuffer.join(' ');
     if (currentBufferStr.length >= settings.bufferSize) {
-      chrome.runtime.sendMessage({
-        action: 'process_chat',
-        chatLog: [...messageBuffer]
-      });
-      messageBuffer = [];
-      updateBufferUI();
+      try {
+        chrome.runtime.sendMessage({
+          action: 'process_chat',
+          chatLog: [...messageBuffer]
+        });
+        messageBuffer = [];
+        updateBufferUI();
+      } catch (e) {
+        console.warn("SmartTODO: Failed to send message (context likely invalidated)", e);
+      }
     }
   } catch (e) {
-    console.error('SmartTODO: Error extracting chat', e);
+    // Only log if it's not a context error
+    if (e instanceof Error && !e.message.includes("context invalidated")) {
+      console.error('SmartTODO: Error extracting chat', e);
+    }
   }
 }
 
