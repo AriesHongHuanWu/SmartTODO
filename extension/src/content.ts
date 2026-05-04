@@ -345,14 +345,21 @@ async function checkAndAccumulateChat() {
 
         let useNano = settings.useLocalAi;
         if (useNano) {
-          if (!(window as any).ai || !(window as any).ai.languageModel) {
-            showToast("❌ Local AI not supported or enabled in flags. Please enable Chrome AI flags.", true);
+          const ai = (window as any).ai || (window as any).model;
+          if (!ai) {
+            showToast("❌ Local AI (window.ai) is missing. Check Chrome Flags.", true);
+            return;
+          }
+          
+          const modelApi = ai.languageModel || ai; // Some versions use window.ai.languageModel, some use window.model
+          if (!modelApi || typeof modelApi.capabilities !== 'function') {
+            showToast("❌ Prompt API (languageModel) not ready. Check chrome://components", true);
             return;
           }
           
           showToast("🤖 Nano is extracting tasks locally...", false, false);
           try {
-            const capabilities = await (window as any).ai.languageModel.capabilities();
+            const capabilities = await modelApi.capabilities();
             if (capabilities.available === 'no') {
               showToast("❌ Local AI model not supported on this device.", true);
               return;
@@ -363,7 +370,7 @@ async function checkAndAccumulateChat() {
               showToast("⏳ Downloading Gemini Nano Model (2GB)... Please keep this tab open.", false, true);
             }
             
-            session = await (window as any).ai.languageModel.create({
+            session = await modelApi.create({
               systemPrompt: `Extract new actionable tasks (todo, reminder, meeting) from the chat log. Output STRICTLY as a JSON array of objects. Schema: [{"title": "Task description", "category": "work|personal|general", "time": "extracted time if any"}]. If no tasks, output []. Do not add any conversational text.`,
               monitor(m: any) {
                 m.addEventListener('downloadprogress', (e: any) => {
