@@ -31,7 +31,7 @@ chrome.storage.local.get('seen_hashes', (res) => {
 const timeRegex = /([今明後]天|禮拜[一二三四五六日天]|星期[一二三四五六日天]|下週|下星期|早上|下午|晚上|\d{1,2}點|\d{1,2}:\d{2}|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|[0-9]{1,2}(am|pm))/i;
 
 // Listen for settings updates and toast requests
-chrome.runtime.onMessage.addListener((request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+chrome.runtime.onMessage.addListener((request: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
   if (request.action === 'settings_updated') {
     settings = { ...settings, ...request.settings };
     updateBufferUI();

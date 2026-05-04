@@ -12,7 +12,7 @@ auth.onAuthStateChanged((user) => {
 });
 
 // Listen for external messages (from Web App) to sync login state
-chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessageExternal.addListener((request, _sender, sendResponse) => {
   if (request.action === 'sync_auth_token') {
     // The web app sends a custom token or signs in immediately on its end and passes it here.
     // Actually, passing session from web is easiest if we implement signInWithCustomToken on backend.
@@ -22,6 +22,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // Keep channel open for async response
   }
+  return false;
 });
 
 
@@ -62,7 +63,7 @@ async function waitForAuth() {
   });
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   if (request.action === 'process_chat') {
     processChatLogs(request.chatLog);
   }
@@ -72,6 +73,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'check_schedule') {
     handleCheckSchedule(request.text);
   }
+  return false;
 });
 
 // Real-time time detection alert logic
