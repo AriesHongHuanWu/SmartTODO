@@ -285,11 +285,22 @@ async function checkAndAccumulateChat() {
           // First load, don't sync entire history
           lastMessageText = chatTexts[chatTexts.length - 1];
         } else {
-          const lastIdx = chatTexts.lastIndexOf(lastMessageText);
+          const lastRaw = lastMessageText.replace(/^\[.*?\]\s*/, '');
+          let lastIdx = -1;
+          
+          // Search bottom-up within the last 30 messages to find the previous tracker
+          for (let i = chatTexts.length - 1; i >= Math.max(0, chatTexts.length - 30); i--) {
+            const currentRaw = chatTexts[i].replace(/^\[.*?\]\s*/, '');
+            if (currentRaw === lastRaw) {
+              lastIdx = i;
+              break;
+            }
+          }
+
           if (lastIdx !== -1) {
             newMessages = chatTexts.slice(lastIdx + 1);
           } else {
-            // Lost track (chat switched or scrolled heavily). Reset tracker to avoid spamming historical tasks.
+            // Lost track (chat switched or scrolled heavily). Reset tracker.
             lastMessageText = chatTexts[chatTexts.length - 1];
           }
         }
