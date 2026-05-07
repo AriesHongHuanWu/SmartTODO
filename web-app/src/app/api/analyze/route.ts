@@ -80,22 +80,55 @@ Chat Logs:
 ${JSON.stringify(chatLogs, null, 2)}
 `;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError: any;
     
-    // Clean up markdown if any
-    const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    let parsedData = { tasks: [] };
-    try {
-      parsedData = JSON.parse(cleanText);
-    } catch (e) {
-      console.warn("AI returned non-JSON or empty response", cleanText);
-    }
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        
+        // Clean up markdown if any
+        const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        let parsedData = { tasks: [] };
+        try {
+          parsedData = JSON.parse(cleanText);
+        } catch (e) {
+          console.warn("AI returned non-JSON or empty response", cleanText);
+        }
 
-    return NextResponse.json(parsedData, { headers: corsHeaders });
+        return NextResponse.json(parsedData, { headers: corsHeaders });
+      } catch (error: any) {
+        lastError = error;
+        const status = error?.status;
+        const isRetryable = status === 503 || status === 429 || error?.message?.includes('Service Unavailable');
+        
+        if (!isRetryable || attempt === maxRetries - 1) {
+          throw error;
+        }
+        
+        // Exponential backoff: 1s, 2s, 4s
+        const delayMs = Math.pow(2, attempt) * 1000;
+        console.warn(`API request failed (attempt ${attempt + 1}/${maxRetries}). Retrying in ${delayMs}ms...`, error.message);
+        
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    throw lastError;
   } catch (error: any) {
     console.error('Error analyzing chat:', error);
-    return NextResponse.json({ error: error.message || 'Failed to analyze chat' }, { status: 500, headers: corsHeaders });
+    
+    // Provide more helpful error messages
+    let errorMessage = error.message || 'Failed to analyze chat';
+    if (error?.message?.includes('503') || error?.message?.includes('Service Unavailable')) {
+      errorMessage = 'AI service is temporarily unavailable due to high demand. Please try again in a few moments.';
+    } else if (error?.message?.includes('429') || error?.message?.includes('Too Many Requests')) {
+      errorMessage = 'Rate limit reached. Please wait a moment before trying again.';
+    }
+    
+    return NextResponse.json({ error: errorMessage }, { status: 500, headers: corsHeaders });
   }
 }
