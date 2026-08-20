@@ -2,9 +2,6 @@
 
 A Chrome extension that reads the chat tab you already have open, extracts the commitments buried in it, and syncs them to a web task list.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/demo-smarttodo.pages.dev-informational)](https://smarttodo.pages.dev)
-
 Most of my actual todos arrive as messages: "can you send that by Friday", "let's meet Tuesday at 3". They never make it into a task app because retyping them is friction. SmartTODO removes the retyping step. A content script watches the DOM of chat sites you allow, buffers newly seen messages, and once the buffer crosses a threshold sends the batch to a language model that returns structured tasks. Those land in Firestore and appear in the web dashboard and calendar in real time.
 
 Web app: **https://smarttodo.pages.dev**
